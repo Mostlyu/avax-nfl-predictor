@@ -5,7 +5,7 @@
     "buildCommand": "pip install -r requirements.txt && python init_database.py"
   },
   "deploy": {
-    "startCommand": "uvicorn api.main:app --host 0.0.0.0 --port ${PORT}",
+    "startCommand": "python init_database.py && uvicorn api.main:app --host 0.0.0.0 --port ${PORT}",
     "restartPolicyType": "ON_FAILURE",
     "restartPolicyMaxRetries": 10
   }

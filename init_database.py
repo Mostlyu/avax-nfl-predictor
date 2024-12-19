@@ -2,6 +2,18 @@
 import sqlite3
 import requests
 from config import API_KEY
+import logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+def create_database():
+    try:
+        logger.info("Starting database initialization...")
+        # Your existing database creation code
+        logger.info("Database initialization complete")
+    except Exception as e:
+        logger.error(f"Error creating database: {e}")
+        raise
 
 def initialize_database():
     # Create database connection
