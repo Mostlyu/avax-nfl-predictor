@@ -8,10 +8,8 @@ import logging
 logger = logging.getLogger(__name__)
 
 class NFLWeeklyDataManager:
-    def __init__(self, api_key):
-        if not api_key:
-            raise ValueError("API_KEY environment variable is not set")
-        logger.info("Initializing NFLWeeklyDataManager...")
+    def __init__(self, api_key: str):
+        logger.info(f"Initializing NFLWeeklyDataManager with API key starting with: {api_key[:5]}...")
         self.api_key = api_key
         self.base_url = 'https://v1.american-football.api-sports.io'
         self.headers = {
