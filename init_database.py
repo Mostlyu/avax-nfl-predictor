@@ -3,41 +3,144 @@ import sqlite3
 import requests
 from config import API_KEY
 import logging
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-def create_database():
-    try:
-        logger.info("Starting database initialization...")
-        # Your existing database creation code
-        logger.info("Database initialization complete")
-    except Exception as e:
-        logger.error(f"Error creating database: {e}")
-        raise
-
 def initialize_database():
-    # Create database connection
-    conn = sqlite3.connect('nfl_data.db')
-    cursor = conn.cursor()
-
-    # Create team_mapping table
-    cursor.execute('''
-    CREATE TABLE IF NOT EXISTS team_mapping (
-        team_identifier TEXT PRIMARY KEY,
-        team_id INTEGER,
-        team_name TEXT,
-        last_updated TIMESTAMP
-    )''')
-
-    # API setup
-    base_url = 'https://v1.american-football.api-sports.io'
-    headers = {
-        'x-rapidapi-host': 'v1.american-football.api-sports.io',
-        'x-rapidapi-key': API_KEY
-    }
-
-    # Fetch teams from API
+    logger.info("Starting database initialization...")
     try:
+        conn = sqlite3.connect('nfl_data.db')
+        cursor = conn.cursor()
+
+        # Create tables without dropping them
+        cursor.execute('''
+        CREATE TABLE IF NOT EXISTS team_stats (
+            game_id INTEGER,
+            team_id INTEGER,
+            stat_name TEXT,
+            stat_value REAL,
+            PRIMARY KEY (game_id, team_id, stat_name)
+        )''')
+
+        cursor.execute('''
+        CREATE TABLE IF NOT EXISTS team_mapping (
+            team_identifier TEXT PRIMARY KEY,
+            team_id INTEGER,
+            team_name TEXT,
+            last_updated TIMESTAMP
+        )''')
+
+        # Add other table creations here...
+         # Create team_stats table
+        cursor.execute('''
+        CREATE TABLE IF NOT EXISTS team_stats (
+            game_id INTEGER,
+            team_id INTEGER,
+            stat_name TEXT,
+            stat_value REAL,
+            PRIMARY KEY (game_id, team_id, stat_name)
+        )''')
+
+        # Create team_mapping table
+        cursor.execute('''
+        CREATE TABLE IF NOT EXISTS team_mapping (
+            team_identifier TEXT PRIMARY KEY,
+            team_id INTEGER,
+            team_name TEXT,
+            last_updated TIMESTAMP
+        )''')
+
+        # Create QB stats table
+        cursor.execute('''
+        CREATE TABLE IF NOT EXISTS qb_stats (
+            game_id INTEGER,
+            team_id INTEGER,
+            player_id INTEGER,
+            player_name TEXT,
+            stat_name TEXT,
+            stat_value REAL,
+            PRIMARY KEY (game_id, team_id, stat_name)
+        )''')
+
+        # Create market odds table
+        cursor.execute('''
+        CREATE TABLE IF NOT EXISTS market_odds (
+            game_id INTEGER,
+            bookmaker_id INTEGER,
+            bet_type TEXT,
+            bet_value TEXT,
+            odds REAL,
+            last_updated TIMESTAMP,
+            PRIMARY KEY (game_id, bookmaker_id, bet_type, bet_value)
+        )''')
+
+        # Create consensus lines table
+        cursor.execute('''
+        CREATE TABLE IF NOT EXISTS consensus_lines (
+            game_id INTEGER,
+            line_type TEXT,
+            consensus_value TEXT,
+            avg_odds REAL,
+            book_count INTEGER,
+            last_updated TIMESTAMP,
+            PRIMARY KEY (game_id, line_type)
+        )''')
+
+        # Create data updates table
+        cursor.execute('''
+        CREATE TABLE IF NOT EXISTS data_updates (
+            update_type TEXT PRIMARY KEY,
+            last_update TIMESTAMP
+        )''')
+
+        # Create team performance table
+        cursor.execute('''
+        CREATE TABLE IF NOT EXISTS team_performance (
+            team_id INTEGER,
+            game_id INTEGER,
+            win_pct REAL,
+            points_per_game REAL,
+            last_game_date TEXT,
+            PRIMARY KEY (team_id, game_id)
+        )''')
+
+        # Create weekly schedule table
+        cursor.execute('''
+        CREATE TABLE IF NOT EXISTS weekly_schedule (
+            game_id INTEGER PRIMARY KEY,
+            date TEXT,
+            time TEXT,
+            home_team TEXT,
+            away_team TEXT,
+            stadium TEXT,
+            city TEXT,
+            status TEXT,
+            last_updated TIMESTAMP
+        )''')
+
+        cursor.execute('''
+        CREATE TABLE IF NOT EXISTS game_predictions_cache (
+            game_id INTEGER PRIMARY KEY,
+            prediction_data TEXT,
+            game_data TEXT,
+            stats_data TEXT,
+            odds_data TEXT,
+            last_updated TIMESTAMP,
+            expiry TIMESTAMP,
+            CONSTRAINT game_predictions_cache_unique UNIQUE (game_id)
+        )''')
+
+        logger.info("Tables created successfully")
+
+        # Initialize team mapping
+        base_url = 'https://v1.american-football.api-sports.io'
+        headers = {
+            'x-rapidapi-host': 'v1.american-football.api-sports.io',
+            'x-rapidapi-key': API_KEY
+        }
+
+        logger.info("Fetching teams from API...")
         response = requests.get(
             f"{base_url}/teams",
             headers=headers,
@@ -47,56 +150,25 @@ def initialize_database():
 
         # Insert teams into database
         for team in teams:
-            # Skip if team name is missing
             if not team.get('name'):
                 continue
 
-            # Safely get team variations
-            variations = []
-
-            # Add full name if available
-            if team.get('name'):
-                variations.append(team['name'].lower())
-                # Add nickname (last word of team name)
-                variations.append(team['name'].split()[-1].lower())
-
-            # Add city if available
-            if team.get('city'):
-                variations.append(team['city'].lower())
-
-            # Filter out None values and duplicates
-            variations = list(set([v for v in variations if v]))
-
-            for variation in variations:
-                try:
-                    cursor.execute('''
-                        INSERT OR REPLACE INTO team_mapping
-                        (team_identifier, team_id, team_name, last_updated)
-                        VALUES (?, ?, ?, CURRENT_TIMESTAMP)
-                    ''', (variation, team['id'], team['name']))
-                    print(f"Added mapping for: {variation} -> {team['name']}")
-                except Exception as e:
-                    print(f"Error adding mapping for {variation}: {e}")
+            cursor.execute('''
+                INSERT OR REPLACE INTO team_mapping
+                (team_identifier, team_id, team_name, last_updated)
+                VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+            ''', (team['name'].lower(), team['id'], team['name']))
+            logger.info(f"Added mapping for: {team['name']}")
 
         conn.commit()
-        print("\nTeam mapping initialized successfully")
-
-        # Verify data
-        cursor.execute("SELECT COUNT(*) FROM team_mapping")
-        count = cursor.fetchone()[0]
-        print(f"Added {count} team mappings to database")
-
-        # Show all mappings
-        cursor.execute("SELECT team_identifier, team_name FROM team_mapping")
-        mappings = cursor.fetchall()
-        print("\nTeam mappings:")
-        for mapping in mappings:
-            print(f"{mapping[0]} -> {mapping[1]}")
+        logger.info("Team mapping initialized successfully")
 
     except Exception as e:
-        print(f"Error initializing database: {e}")
+        logger.error(f"Error initializing database: {e}")
+        raise
     finally:
-        conn.close()
+        if conn:
+            conn.close()
 
 if __name__ == "__main__":
     initialize_database()
