@@ -4,6 +4,7 @@ from datetime import datetime, timedelta
 import sqlite3
 import requests
 import logging
+import os
 
 logger = logging.getLogger(__name__)
 
@@ -19,7 +20,8 @@ class NFLWeeklyDataManager:
             'x-rapidapi-host': 'v1.american-football.api-sports.io',
             'x-rapidapi-key': api_key
         }
-        self.db_path = 'nfl_data.db'
+        self.db_path = os.path.join(os.getcwd(), 'nfl_data.db')
+        logger.info(f"Using database path: {self.db_path}")
         self.conn = sqlite3.connect(self.db_path)
         self.cursor = self.conn.cursor()
 
