@@ -21,11 +21,69 @@ class NFLWeeklyDataManager:
             'x-rapidapi-key': api_key
         }
         self.db_path = os.path.join(os.getcwd(), 'nfl_data.db')
-        logger.info(f"Using database path: {self.db_path}")
         self.conn = sqlite3.connect(self.db_path)
         self.cursor = self.conn.cursor()
 
+        # Create tables if they don't exist
+        self.create_tables()
         self.init_team_mapping()
+
+    def create_tables(self):
+        """Create necessary tables if they don't exist"""
+        try:
+            logger.info("Creating tables if they don't exist...")
+            self.cursor.execute('''
+            CREATE TABLE IF NOT EXISTS team_mapping (
+                team_identifier TEXT PRIMARY KEY,
+                team_id INTEGER,
+                team_name TEXT,
+                last_updated TIMESTAMP
+            )''')
+
+            self.cursor.execute('''
+            CREATE TABLE IF NOT EXISTS team_stats (
+                game_id INTEGER,
+                team_id INTEGER,
+                stat_name TEXT,
+                stat_value REAL,
+                PRIMARY KEY (game_id, team_id, stat_name)
+            )''')
+
+            self.cursor.execute('''
+            CREATE TABLE IF NOT EXISTS weekly_schedule (
+                game_id INTEGER PRIMARY KEY,
+                date TEXT,
+                time TEXT,
+                home_team TEXT,
+                away_team TEXT,
+                stadium TEXT,
+                city TEXT,
+                status TEXT,
+                last_updated TIMESTAMP
+            )''')
+
+            self.cursor.execute('''
+            CREATE TABLE IF NOT EXISTS data_updates (
+                update_type TEXT PRIMARY KEY,
+                last_update TIMESTAMP
+            )''')
+
+            self.cursor.execute('''
+            CREATE TABLE IF NOT EXISTS market_odds (
+                game_id INTEGER,
+                bookmaker_id INTEGER,
+                bet_type TEXT,
+                bet_value TEXT,
+                odds REAL,
+                last_updated TIMESTAMP,
+                PRIMARY KEY (game_id, bookmaker_id, bet_type, bet_value)
+            )''')
+
+            self.conn.commit()
+            logger.info("Tables created successfully")
+        except Exception as e:
+            logger.error(f"Error creating tables: {e}")
+            raise
 
     def needs_update(self) -> bool:
         """Check if data needs to be updated (weekly check)"""
