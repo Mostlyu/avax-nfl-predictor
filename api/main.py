@@ -17,6 +17,16 @@ logger = logging.getLogger(__name__)
 
 app = FastAPI()
 
+# Add error handling for API key
+if not API_KEY:
+    raise ValueError("API_KEY environment variable must be set")
+
+try:
+    weekly_manager = NFLWeeklyDataManager(API_KEY)
+except Exception as e:
+    print(f"Error initializing weekly manager: {e}")
+    raise
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
