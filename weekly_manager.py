@@ -369,22 +369,69 @@ class NFLWeeklyDataManager:
     def init_team_mapping(self):
         """Initialize team mapping from API response"""
         try:
-            url = f"{self.base_url}/teams"
-            params = {'league': '1', 'season': '2024'}
-            response = requests.get(url, headers=self.headers, params=params)
-            teams = response.json()['response']
-
-            for team in teams:
-                self.cursor.execute('''
-                    INSERT OR REPLACE INTO team_mapping
-                    (team_identifier, team_id, team_name, last_updated)
-                    VALUES (?, ?, ?, datetime('now'))
-                ''', (
-                    team['name'].lower(),
-                    team['id'],
-                    team['name'],
-                ))
-
+            # First verify table exists
+            self.cursor.execute('''
+            CREATE TABLE IF NOT EXISTS team_mapping (
+                team_identifier TEXT PRIMARY KEY,
+                team_id INTEGER,
+                team_name TEXT,
+                last_updated TIMESTAMP
+            )''')
             self.conn.commit()
+            logger.info("Team mapping table verified/created")
+
+            # Verify table is empty before adding data
+            self.cursor.execute("SELECT COUNT(*) FROM team_mapping")
+            count = self.cursor.fetchone()[0]
+            logger.info(f"Current team mappings in database: {count}")
+
+            # Only fetch from API if table is empty
+            if count == 0:
+                logger.info("Fetching teams from API...")
+                url = f"{self.base_url}/teams"
+                params = {'league': '1', 'season': '2024'}
+
+                try:
+                    response = requests.get(url, headers=self.headers, params=params)
+                    response.raise_for_status()  # Raise exception for bad status codes
+                    data = response.json()
+                    teams = data.get('response', [])
+                    logger.info(f"Fetched {len(teams)} teams from API")
+
+                    if not teams:
+                        logger.error("No teams returned from API")
+                        return
+
+                    # Insert teams one by one with error handling
+                    for team in teams:
+                        try:
+                            name = team.get('name')
+                            team_id = team.get('id')
+                            if name and team_id:
+                                self.cursor.execute('''
+                                    INSERT OR REPLACE INTO team_mapping
+                                    (team_identifier, team_id, team_name, last_updated)
+                                    VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+                                ''', (name.lower(), team_id, name))
+                                logger.info(f"Added team: {name}")
+                        except sqlite3.Error as e:
+                            logger.error(f"Error inserting team {team.get('name')}: {e}")
+                            continue
+
+                    self.conn.commit()
+                    logger.info("Team mapping initialization complete")
+
+                except requests.RequestException as e:
+                    logger.error(f"API request failed: {e}")
+                    raise
+                except ValueError as e:
+                    logger.error(f"JSON parsing failed: {e}")
+                    raise
+
+        except sqlite3.Error as e:
+            logger.error(f"Database error in init_team_mapping: {e}")
+            raise
         except Exception as e:
-            logger.error(f"Error initializing team mapping: {e}")
+            logger.error(f"Unexpected error in init_team_mapping: {e}")
+            logger.error(f"Error type: {type(e)}")
+            raise

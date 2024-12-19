@@ -17,16 +17,7 @@ logger = logging.getLogger(__name__)
 
 app = FastAPI()
 
-# Add error handling for API key
-if not API_KEY:
-    raise ValueError("API_KEY environment variable must be set")
-
-try:
-    weekly_manager = NFLWeeklyDataManager(API_KEY)
-except Exception as e:
-    print(f"Error initializing weekly manager: {e}")
-    raise
-
+## Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -34,6 +25,20 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+try:
+    if not API_KEY:
+        raise ValueError("API_KEY environment variable must be set")
+    weekly_manager = NFLWeeklyDataManager(API_KEY)
+    logger.info("Weekly manager initialized successfully")
+except Exception as e:
+    logger.error(f"Failed to initialize weekly manager: {e}")
+    # Continue running the app even if initialization fails
+    weekly_manager = None
+
+@app.get("/healthcheck")
+async def healthcheck():
+    return {"status": "ok", "weekly_manager_initialized": weekly_manager is not None}
 
 # Initialize predictor
 predictor = NFLPredictor(API_KEY)
