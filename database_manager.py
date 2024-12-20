@@ -2,13 +2,14 @@ from sqlalchemy import create_engine, MetaData, Table, Column, Integer, String, 
 from sqlalchemy.ext.declarative import declarative_base
 import os
 import logging
+from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
 # Get database URL from Railway
 DATABASE_URL = os.getenv('DATABASE_URL')
 if not DATABASE_URL:
-    DATABASE_URL = "sqlite:///nfl_data.db"  # Fallback for local development
+    raise ValueError("DATABASE_URL must be set")
 
 engine = create_engine(DATABASE_URL)
 Base = declarative_base()
@@ -19,7 +20,7 @@ class TeamMapping(Base):
     team_identifier = Column(String, primary_key=True)
     team_id = Column(Integer)
     team_name = Column(String)
-    last_updated = Column(DateTime)
+    last_updated = Column(DateTime, default=datetime.utcnow)
 
 def init_db():
     try:

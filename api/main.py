@@ -1,5 +1,6 @@
 # api/main.py
 from fastapi import FastAPI, HTTPException
+from sqlalchemy import engine
 from fastapi.middleware.cors import CORSMiddleware
 from datetime import datetime, timedelta, timezone
 from typing import List, Dict
@@ -186,3 +187,11 @@ async def get_prediction(game_id: int):
             "success": False,
             "error": str(e)
         }
+
+@app.get("/db-test")
+async def test_db():
+    try:
+        result = engine.execute("SELECT 1")
+        return {"status": "Database connected successfully"}
+    except Exception as e:
+        return {"status": "Database connection failed", "error": str(e)}
