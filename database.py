@@ -1,6 +1,54 @@
 # database.py
 import sqlite3
 from datetime import datetime
+from sqlalchemy import create_engine, MetaData, Table, Column, Integer, String, Float, DateTime
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker, Session
+from datetime import datetime
+import os
+import logging
+
+logger = logging.getLogger(__name__)
+
+# Get database URL from Railway or use SQLite for local development
+DATABASE_URL = os.getenv('DATABASE_URL', 'sqlite:///nfl_data.db')
+if DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+
+# Create engine with error handling
+try:
+    engine = create_engine(DATABASE_URL, pool_pre_ping=True)
+    logger.info(f"Database engine created successfully")
+except Exception as e:
+    logger.error(f"Failed to create database engine: {e}")
+    raise
+
+Base = declarative_base()
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+# Define models
+class TeamMapping(Base):
+    __tablename__ = 'team_mapping'
+
+    team_identifier = Column(String, primary_key=True)
+    team_id = Column(Integer)
+    team_name = Column(String)
+    last_updated = Column(DateTime, default=datetime.utcnow)
+
+def init_db():
+    try:
+        Base.metadata.create_all(bind=engine)
+        logger.info("Database tables created successfully")
+    except Exception as e:
+        logger.error(f"Failed to create database tables: {e}")
+        raise
+
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
 
 def create_database():
     conn = sqlite3.connect('nfl_data.db')

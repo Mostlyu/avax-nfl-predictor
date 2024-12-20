@@ -1,7 +1,7 @@
 # weekly_manager.py
 
 from datetime import datetime, timedelta
-from database_manager import engine, TeamMapping
+from database_manager import engine, TeamMapping, SessionLocal
 from sqlalchemy.orm import sessionmaker
 import sqlite3
 import requests
@@ -14,49 +14,67 @@ logger = logging.getLogger(__name__)
 Session = sessionmaker(bind=engine)
 
 class NFLWeeklyDataManager:
-    def __init__(self, api_key):
+    def __init__(self, api_key: str):
         if not api_key:
-            raise ValueError("API_KEY is not set")
-        self.api_key = api_key
-        logger.info("Initializing NFLWeeklyDataManager")
+            raise ValueError("API_KEY is required")
+
         self.api_key = api_key
         self.base_url = 'https://v1.american-football.api-sports.io'
         self.headers = {
             'x-rapidapi-host': 'v1.american-football.api-sports.io',
             'x-rapidapi-key': api_key
         }
-        self.session = Session()
-        self.init_team_mapping()
+
+        # Initialize database on startup
+        try:
+            self.init_team_mapping()
+            logger.info("NFLWeeklyDataManager initialized successfully")
+        except Exception as e:
+            logger.error(f"Failed to initialize NFLWeeklyDataManager: {e}")
+            raise
 
     def init_team_mapping(self):
+        db = SessionLocal()
         try:
-            # Check if we already have teams
-            existing_teams = self.session.query(TeamMapping).count()
-            if existing_teams == 0:
-                url = f"{self.base_url}/teams"
+            # Check if we need to initialize
+            existing_count = db.query(TeamMapping).count()
+            if existing_count == 0:
+                logger.info("Fetching teams from API...")
                 response = requests.get(
-                    url,
+                    f"{self.base_url}/teams",
                     headers=self.headers,
                     params={'league': '1', 'season': '2024'}
                 )
-                teams = response.json()['response']
+                response.raise_for_status()
+
+                teams = response.json().get('response', [])
+                logger.info(f"Fetched {len(teams)} teams from API")
 
                 for team in teams:
-                    if team.get('name'):
+                    if name := team.get('name'):
                         mapping = TeamMapping(
-                            team_identifier=team['name'].lower(),
-                            team_id=team['id'],
-                            team_name=team['name'],
-                            last_updated=datetime.now()
+                            team_identifier=name.lower(),
+                            team_id=team.get('id'),
+                            team_name=name,
+                            last_updated=datetime.utcnow()
                         )
-                        self.session.add(mapping)
+                        db.add(mapping)
 
-                self.session.commit()
+                db.commit()
                 logger.info("Team mapping initialized successfully")
-        except Exception as e:
-            logger.error(f"Error initializing team mapping: {e}")
-            self.session.rollback()
+            else:
+                logger.info(f"Team mapping already exists with {existing_count} entries")
+
+        except requests.exceptions.RequestException as e:
+            logger.error(f"API request failed: {e}")
+            db.rollback()
             raise
+        except Exception as e:
+            logger.error(f"Failed to initialize team mapping: {e}")
+            db.rollback()
+            raise
+        finally:
+            db.close()
 
     def create_tables(self):
         """Create necessary tables if they don't exist"""
