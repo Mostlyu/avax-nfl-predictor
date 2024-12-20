@@ -1,17 +1,13 @@
-# main.py
-from predictor import NFLPredictor
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from database_manager import init_db
+from weekly_manager import NFLWeeklyDataManager
 from config import API_KEY
-from database import init_database
 
-def main():
-    # Initialize database
-    init_database()
+app = FastAPI()
 
-    # Create predictor instance
-    predictor = NFLPredictor(API_KEY)
+# Initialize database
+init_db()
 
-    # Test prediction
-    predictor.print_prediction('Eagles', 'Commanders')
-
-if __name__ == "__main__":
-    main()
+# Initialize weekly manager
+weekly_manager = NFLWeeklyDataManager(API_KEY)
