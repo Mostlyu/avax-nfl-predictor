@@ -20,7 +20,7 @@ class TeamMapping(Base):
     team_identifier = Column(String, primary_key=True)
     team_id = Column(Integer)
     team_name = Column(String)
-    last_updated = Column(DateTime, default=datetime.utcnow)
+    last_updated = Column(DateTime, default=datetime.now(datetime.timezone.utc))
 
 def init_db():
     try:
