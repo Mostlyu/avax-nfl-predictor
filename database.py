@@ -6,12 +6,17 @@ import os
 import logging
 from datetime import datetime
 
+# Configure logging
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Get database URL from Railway or use SQLite for local development
+# Get database URL and log it (without sensitive info)
 DATABASE_URL = os.getenv('DATABASE_URL', 'sqlite:///nfl_data.db')
+logger.info(f"Database type: {'postgresql' if 'postgresql' in DATABASE_URL else 'sqlite'}")
+
 if DATABASE_URL.startswith("postgres://"):
     DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+    logger.info("Converted postgres:// to postgresql://")
 
 # Create engine with error handling
 try:
@@ -19,9 +24,9 @@ try:
         DATABASE_URL,
         pool_pre_ping=True,
         pool_recycle=3600,
-        echo=True  # This will log all SQL statements
+        echo=True
     )
-    logger.info(f"Database engine created successfully")
+    logger.info("Database engine created successfully")
 except Exception as e:
     logger.error(f"Failed to create database engine: {e}")
     raise
@@ -29,7 +34,7 @@ except Exception as e:
 Base = declarative_base()
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
-# Define all models
+# Define models
 class TeamMapping(Base):
     __tablename__ = 'team_mapping'
     team_identifier = Column(String, primary_key=True)
@@ -37,58 +42,39 @@ class TeamMapping(Base):
     team_name = Column(String)
     last_updated = Column(DateTime, default=datetime.utcnow)
 
-class TeamStats(Base):
-    __tablename__ = 'team_stats'
-    game_id = Column(Integer, primary_key=True)
-    team_id = Column(Integer, primary_key=True)
-    stat_name = Column(String, primary_key=True)
-    stat_value = Column(Float)
-
-class WeeklySchedule(Base):
-    __tablename__ = 'weekly_schedule'
-    game_id = Column(Integer, primary_key=True)
-    date = Column(String)
-    time = Column(String)
-    home_team = Column(String)
-    away_team = Column(String)
-    stadium = Column(String)
-    city = Column(String)
-    status = Column(String)
-    last_updated = Column(DateTime)
-
-class MarketOdds(Base):
-    __tablename__ = 'market_odds'
-    game_id = Column(Integer, primary_key=True)
-    bookmaker_id = Column(Integer, primary_key=True)
-    bet_type = Column(String, primary_key=True)
-    bet_value = Column(String, primary_key=True)
-    odds = Column(Float)
-    last_updated = Column(DateTime)
-
-class DataUpdates(Base):
-    __tablename__ = 'data_updates'
-    update_type = Column(String, primary_key=True)
-    last_update = Column(DateTime)
-
-class GamePredictionsCache(Base):
-    __tablename__ = 'game_predictions_cache'
-    game_id = Column(Integer, primary_key=True)
-    prediction_data = Column(Text)
-    game_data = Column(Text)
-    stats_data = Column(Text)
-    odds_data = Column(Text)
-    last_updated = Column(DateTime)
-    expiry = Column(DateTime)
+# ... [keep your other model definitions] ...
 
 def init_db():
+    """Initialize database and create all tables"""
     try:
+        logger.info("Starting database initialization...")
+
+        # Log all table names that will be created
+        tables = Base.metadata.tables.keys()
+        logger.info(f"Preparing to create tables: {', '.join(tables)}")
+
+        # Create all tables
         Base.metadata.create_all(bind=engine)
-        logger.info("Database tables created successfully")
+
+        # Verify tables were created
+        inspector = engine.inspect(engine)
+        created_tables = inspector.get_table_names()
+        logger.info(f"Created tables: {', '.join(created_tables)}")
+
+        # Specifically check for team_mapping table
+        if 'team_mapping' in created_tables:
+            logger.info("team_mapping table was created successfully")
+        else:
+            logger.error("team_mapping table was not created!")
+
+        return True
     except Exception as e:
         logger.error(f"Failed to create database tables: {e}")
+        logger.error(f"Error type: {type(e)}")
         raise
 
 def get_db():
+    """Get database session"""
     db = SessionLocal()
     try:
         yield db
