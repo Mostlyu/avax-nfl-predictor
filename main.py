@@ -3,17 +3,13 @@ from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 import logging
-import os
 from contextlib import asynccontextmanager
 from database import init_db, get_db, Base, engine
 from weekly_manager import NFLWeeklyDataManager
 from config import API_KEY
 
 # Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Global weekly_manager instance
@@ -21,36 +17,28 @@ weekly_manager = None
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    logger.info("Starting application initialization...")
-
-    # Log environment variables (excluding sensitive data)
-    logger.info(f"API_KEY present: {'Yes' if API_KEY else 'No'}")
-    logger.info(f"DATABASE_URL present: {'Yes' if os.getenv('DATABASE_URL') else 'No'}")
-
+    # Initialize database before application starts
     try:
-        # Initialize database first
-        logger.info("Starting database initialization...")
+        logger.info("Starting application initialization...")
+        logger.info("Initializing database...")
         init_db()
-        logger.info("Database initialization completed")
+        logger.info("Database initialized successfully")
 
-        # Initialize weekly manager
-        logger.info("Starting weekly manager initialization...")
+        # Initialize weekly manager after database is ready
         global weekly_manager
+        logger.info("Initializing weekly manager...")
         weekly_manager = NFLWeeklyDataManager(API_KEY)
-        logger.info("Weekly manager initialization completed")
+        logger.info("Weekly manager initialized successfully")
 
     except Exception as e:
         logger.error(f"Startup error: {e}")
-        logger.error(f"Error type: {type(e)}")
         raise
 
-    logger.info("Application initialization completed successfully")
     yield
 
-    logger.info("Shutting down application...")
+    # Cleanup
     if weekly_manager:
         await weekly_manager.cleanup()
-    logger.info("Shutdown complete")
 
 app = FastAPI(lifespan=lifespan)
 
@@ -67,10 +55,6 @@ app.add_middleware(
 async def health_check(db: Session = Depends(get_db)):
     """Health check endpoint"""
     try:
-        # Test database connection
-        result = db.execute("SELECT 1").scalar()
-
-        # Get table names
         inspector = engine.inspect(engine)
         tables = inspector.get_table_names()
 
@@ -78,7 +62,7 @@ async def health_check(db: Session = Depends(get_db)):
             "status": "healthy",
             "database_connected": True,
             "tables_present": tables,
-            "weekly_manager_status": "initialized" if weekly_manager else "not initialized",
+            "weekly_manager": "initialized" if weekly_manager else "not initialized"
         }
     except Exception as e:
         logger.error(f"Health check failed: {e}")
