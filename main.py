@@ -1,8 +1,10 @@
+# main.py
 from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 import logging
-from database import init_db, get_db
+from contextlib import asynccontextmanager
+from database import init_db, get_db, Base, engine
 from weekly_manager import NFLWeeklyDataManager
 from config import API_KEY
 
@@ -10,9 +12,35 @@ from config import API_KEY
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-app = FastAPI()
+# Global weekly_manager instance
+weekly_manager = None
 
-# CORS middleware
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Initialize database before application starts
+    try:
+        logger.info("Initializing database...")
+        init_db()  # This creates all tables
+        logger.info("Database initialized successfully")
+
+        # Initialize weekly manager after database is ready
+        global weekly_manager
+        weekly_manager = NFLWeeklyDataManager(API_KEY)
+        logger.info("Weekly manager initialized successfully")
+
+    except Exception as e:
+        logger.error(f"Startup error: {e}")
+        raise
+
+    yield
+
+    # Cleanup (if needed)
+    if weekly_manager:
+        await weekly_manager.cleanup()
+
+app = FastAPI(lifespan=lifespan)
+
+# Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -21,33 +49,17 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Initialize database on startup
-@app.on_event("startup")
-async def startup_event():
-    try:
-        init_db()
-        logger.info("Database initialized successfully")
-    except Exception as e:
-        logger.error(f"Failed to initialize database: {e}")
-        raise
-
-# Initialize weekly manager
-try:
-    weekly_manager = NFLWeeklyDataManager(API_KEY)
-except Exception as e:
-    logger.error(f"Failed to initialize weekly manager: {e}")
-    weekly_manager = None
-
-# Health check endpoint
 @app.get("/health")
 async def health_check(db: Session = Depends(get_db)):
+    """Health check endpoint that verifies database connection"""
     try:
         # Test database connection
-        db.execute("SELECT 1")
+        result = db.execute("SELECT 1").scalar()
+
         return {
             "status": "healthy",
-            "database": "connected",
-            "weekly_manager": "initialized" if weekly_manager else "not initialized"
+            "database_connected": True,
+            "weekly_manager_status": "initialized" if weekly_manager else "not initialized"
         }
     except Exception as e:
         logger.error(f"Health check failed: {e}")
@@ -55,3 +67,5 @@ async def health_check(db: Session = Depends(get_db)):
             "status": "unhealthy",
             "error": str(e)
         }
+
+# Keep your other endpoints below...
