@@ -1,7 +1,7 @@
 # database.py
-from sqlalchemy import create_engine, MetaData, Column, Integer, String, Float, DateTime, Text, ForeignKey
+from sqlalchemy import create_engine, MetaData, Table, Column, Integer, String, Float, DateTime, Text, inspect
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker, Session
+from sqlalchemy.orm import sessionmaker
 import os
 import logging
 from datetime import datetime
@@ -134,7 +134,7 @@ def init_db():
         Base.metadata.create_all(bind=engine)
 
         # Verify tables were created
-        inspector = engine.inspect(engine)
+        inspector = inspect(engine)
         tables = inspector.get_table_names()
         logger.info(f"Created tables: {', '.join(tables)}")
 
