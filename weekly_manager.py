@@ -1,9 +1,9 @@
 # weekly_manager.py
-from datetime import datetime, timedelta
 import requests
 import logging
+from datetime import datetime, timedelta
 from sqlalchemy.orm import Session
-from database import SessionLocal, TeamMapping, WeeklySchedule, TeamStats, MarketOdds, DataUpdates
+from database import SessionLocal, TeamMapping, WeeklySchedule, DataUpdates
 
 logger = logging.getLogger(__name__)
 
@@ -21,6 +21,7 @@ class NFLWeeklyDataManager:
 
         # Initialize database on startup
         try:
+            logger.info("Initializing NFLWeeklyDataManager")
             self.db = SessionLocal()
             self.init_team_mapping()
             logger.info("NFLWeeklyDataManager initialized successfully")
@@ -28,13 +29,16 @@ class NFLWeeklyDataManager:
             logger.error(f"Failed to initialize NFLWeeklyDataManager: {e}")
             raise
         finally:
-            self.db.close()
+            if hasattr(self, 'db'):
+                self.db.close()
 
     def init_team_mapping(self):
         """Initialize team mapping from API response"""
         try:
             # Check if we need to initialize
             existing_count = self.db.query(TeamMapping).count()
+            logger.info(f"Found {existing_count} existing team mappings")
+
             if existing_count == 0:
                 logger.info("Fetching teams from API...")
                 response = requests.get(
@@ -56,12 +60,17 @@ class NFLWeeklyDataManager:
                             last_updated=datetime.utcnow()
                         )
                         self.db.add(mapping)
+                        logger.info(f"Added mapping for team: {name}")
 
                 self.db.commit()
-                logger.info("Team mapping initialized successfully")
+                logger.info("Team mapping initialization complete")
             else:
-                logger.info(f"Team mapping already exists with {existing_count} entries")
+                logger.info("Team mapping already exists")
 
+        except requests.exceptions.RequestException as e:
+            logger.error(f"API request failed: {e}")
+            self.db.rollback()
+            raise
         except Exception as e:
             logger.error(f"Failed to initialize team mapping: {e}")
             self.db.rollback()
@@ -70,50 +79,55 @@ class NFLWeeklyDataManager:
     def needs_update(self) -> bool:
         """Check if data needs to be updated (weekly check)"""
         try:
-            db = SessionLocal()
-            result = db.query(DataUpdates).filter_by(update_type='weekly').first()
+            update_record = self.db.query(DataUpdates).filter_by(update_type='weekly').first()
 
-            if not result:
-                logger.info("No previous update found, update needed")
+            if not update_record:
+                logger.info("No previous update found")
                 return True
 
-            days_since_update = (datetime.now() - result.last_update).days
+            days_since_update = (datetime.now() - update_record.last_update).days
             logger.info(f"Days since last update: {days_since_update}")
             return days_since_update >= 7
 
         except Exception as e:
             logger.error(f"Error checking update status: {e}")
             return True
-        finally:
-            db.close()
 
     def get_cached_schedule(self):
         """Get schedule from cache"""
         try:
-            db = SessionLocal()
             current_time = datetime.now()
-            games = db.query(WeeklySchedule).filter(
+            schedule = self.db.query(WeeklySchedule).filter(
                 WeeklySchedule.date >= current_time.strftime('%Y-%m-%d')
             ).all()
 
-            return [game.__dict__ for game in games]
+            return [
+                {
+                    'id': game.game_id,
+                    'date': game.date,
+                    'time': game.time,
+                    'home_team': game.home_team,
+                    'away_team': game.away_team,
+                    'stadium': game.stadium,
+                    'city': game.city,
+                    'status': game.status
+                }
+                for game in schedule
+            ]
         except Exception as e:
             logger.error(f"Error fetching cached schedule: {e}")
             return []
-        finally:
-            db.close()
 
     def update_weekly_data(self):
         """Update schedule if needed"""
         if not self.needs_update():
-            logger.info("Schedule is up to date, using cached data")
+            logger.info("Schedule is up to date")
             return self.get_cached_schedule()
 
         logger.info("Schedule update needed, fetching from API...")
-        db = SessionLocal()
         try:
             # Clear existing schedule
-            db.query(WeeklySchedule).delete()
+            self.db.query(WeeklySchedule).delete()
 
             schedule = []
             for i in range(7):
@@ -125,6 +139,7 @@ class NFLWeeklyDataManager:
                     headers=self.headers,
                     params={'league': '1', 'season': '2024', 'date': date}
                 )
+                response.raise_for_status()
                 games = response.json().get('response', [])
 
                 for game in games:
@@ -139,27 +154,25 @@ class NFLWeeklyDataManager:
                         status=game['game']['status'].get('long', ''),
                         last_updated=datetime.utcnow()
                     )
-                    db.add(new_game)
+                    self.db.add(new_game)
                     schedule.append(game)
 
             # Update last update timestamp
-            update_record = DataUpdates(
+            self.db.merge(DataUpdates(
                 update_type='weekly',
                 last_update=datetime.utcnow()
-            )
-            db.merge(update_record)
+            ))
 
-            db.commit()
-            logger.info("Schedule successfully updated and cached")
+            self.db.commit()
+            logger.info("Schedule successfully updated")
             return schedule
 
         except Exception as e:
             logger.error(f"Error updating weekly data: {e}")
-            db.rollback()
+            self.db.rollback()
             return []
-        finally:
-            db.close()
 
     async def cleanup(self):
         """Cleanup resources"""
-        pass
+        if hasattr(self, 'db'):
+            self.db.close()
