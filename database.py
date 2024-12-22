@@ -1,11 +1,10 @@
 # database.py
-from sqlalchemy import create_engine, MetaData, Table, Column, Integer, String, Float, DateTime, Text
+from sqlalchemy import create_engine, MetaData, Table, Column, Integer, String, Float, DateTime, Text, text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 import os
 import logging
 from datetime import datetime
-from sqlalchemy import inspect as sqlalchemy_inspect  # Renamed import
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -25,17 +24,14 @@ try:
     engine = create_engine(
         DATABASE_URL,
         pool_pre_ping=True,
-        pool_recycle=300,
         pool_size=5,
-        max_overflow=10,
-        echo=True  # Set to False in production
+        max_overflow=10
     )
     logger.info("Database engine created successfully")
 except Exception as e:
     logger.error(f"Failed to create database engine: {e}")
     raise
 
-# Create base class for declarative models
 Base = declarative_base()
 
 # Define models
@@ -124,7 +120,6 @@ class GamePredictionsCache(Base):
     last_updated = Column(DateTime, default=datetime.utcnow)
     expiry = Column(DateTime)
 
-# Create SessionLocal class
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 def init_db():
@@ -133,14 +128,9 @@ def init_db():
         logger.info("Creating database tables...")
         Base.metadata.create_all(bind=engine)
 
-        # Verify tables were created
-        inspector = sqlalchemy_inspect(engine)  # Using renamed import
-        tables = inspector.get_table_names()
-        logger.info(f"Created tables: {', '.join(tables)}")
-
+        # Test connection
         with engine.connect() as connection:
-            # Test connection
-            connection.execute("SELECT 1")
+            connection.execute(text("SELECT 1"))
             logger.info("Database connection test successful")
 
         return True
