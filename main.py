@@ -3,6 +3,7 @@ from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 import logging
+from datetime import datetime
 from contextlib import asynccontextmanager
 from database import init_db, get_db, Base, engine
 from weekly_manager import NFLWeeklyDataManager
@@ -55,14 +56,12 @@ app.add_middleware(
 async def health_check(db: Session = Depends(get_db)):
     """Health check endpoint"""
     try:
-        inspector = engine.inspect(engine)
-        tables = inspector.get_table_names()
-
+        # Test database connection
+        result = db.execute("SELECT 1").scalar()
         return {
             "status": "healthy",
-            "database_connected": True,
-            "tables_present": tables,
-            "weekly_manager": "initialized" if weekly_manager else "not initialized"
+            "database": "connected" if result == 1 else "error",
+            "timestamp": datetime.now().isoformat()
         }
     except Exception as e:
         logger.error(f"Health check failed: {e}")

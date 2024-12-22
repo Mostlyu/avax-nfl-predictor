@@ -1,12 +1,12 @@
 # database.py
-from sqlalchemy import create_engine, MetaData, Table, Column, Integer, String, Float, DateTime, Text, inspect
+from sqlalchemy import create_engine, MetaData, Table, Column, Integer, String, Float, DateTime, Text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 import os
 import logging
 from datetime import datetime
+from sqlalchemy import inspect as sqlalchemy_inspect  # Renamed import
 
-# Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -134,9 +134,14 @@ def init_db():
         Base.metadata.create_all(bind=engine)
 
         # Verify tables were created
-        inspector = inspect(engine)
+        inspector = sqlalchemy_inspect(engine)  # Using renamed import
         tables = inspector.get_table_names()
         logger.info(f"Created tables: {', '.join(tables)}")
+
+        with engine.connect() as connection:
+            # Test connection
+            connection.execute("SELECT 1")
+            logger.info("Database connection test successful")
 
         return True
     except Exception as e:
