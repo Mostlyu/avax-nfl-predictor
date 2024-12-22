@@ -35,6 +35,15 @@ class NFLWeeklyDataManager:
     def init_team_mapping(self):
         """Initialize team mapping from API response"""
         try:
+            # Try to select from the table first to verify it exists
+            logger.info("Checking team_mapping table...")
+            try:
+                self.db.execute('SELECT 1 FROM public.team_mapping LIMIT 1')
+                logger.info("team_mapping table exists")
+            except Exception as e:
+                logger.error(f"Error checking team_mapping table: {e}")
+                raise
+
             # Check if we need to initialize
             existing_count = self.db.query(TeamMapping).count()
             logger.info(f"Found {existing_count} existing team mappings")
@@ -67,10 +76,6 @@ class NFLWeeklyDataManager:
             else:
                 logger.info("Team mapping already exists")
 
-        except requests.exceptions.RequestException as e:
-            logger.error(f"API request failed: {e}")
-            self.db.rollback()
-            raise
         except Exception as e:
             logger.error(f"Failed to initialize team mapping: {e}")
             self.db.rollback()
