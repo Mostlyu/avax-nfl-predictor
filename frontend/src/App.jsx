@@ -171,7 +171,9 @@ function App() {
   const fetchGames = async () => {
     try {
       setLoading(true)
-      const response = await fetch('http://localhost:8000/schedule')
+      // Use environment variable for API URL
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+      const response = await fetch(`${apiUrl}/schedule`)
       const data = await response.json()
       if (data.success) {
         setGames(data.schedule)

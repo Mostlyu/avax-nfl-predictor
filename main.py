@@ -1,74 +1,94 @@
-# api/main.py
-from fastapi import FastAPI, HTTPException
-from sqlalchemy import engine
+from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from datetime import datetime, timedelta, timezone
-from typing import List, Dict
-from predictor import NFLPredictor
-from config import API_KEY
-from weekly_manager import NFLWeeklyDataManager
+from sqlalchemy.orm import Session
 import logging
 import requests
-
-# Initialize weekly data manager (after your other initializations)
-weekly_manager = NFLWeeklyDataManager(API_KEY)
+from datetime import datetime, timedelta
+from contextlib import asynccontextmanager
+from database import init_db, get_db, Base, engine
+from weekly_manager import NFLWeeklyDataManager
+from predictor import NFLPredictor
+from config import API_KEY
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-app = FastAPI()
+# Global instances
+weekly_manager = None
+predictor = None
 
-## Add CORS middleware
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    try:
+        logger.info("Starting application initialization...")
+        init_db()
+
+        # Initialize global instances
+        global weekly_manager, predictor
+        weekly_manager = NFLWeeklyDataManager(API_KEY)
+        predictor = NFLPredictor(API_KEY)
+
+        logger.info("Application initialized successfully")
+    except Exception as e:
+        logger.error(f"Startup error: {e}")
+        raise
+
+    yield
+
+    if weekly_manager:
+        await weekly_manager.cleanup()
+
+app = FastAPI(lifespan=lifespan)
+
+# Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["*"],  # In production, specify your Vercel URL
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-try:
-    if not API_KEY:
-        raise ValueError("API_KEY environment variable must be set")
-    weekly_manager = NFLWeeklyDataManager(API_KEY)
-    logger.info("Weekly manager initialized successfully")
-except Exception as e:
-    logger.error(f"Failed to initialize weekly manager: {e}")
-    # Continue running the app even if initialization fails
-    weekly_manager = None
-
-@app.get("/healthcheck")
-async def healthcheck():
-    return {"status": "ok", "weekly_manager_initialized": weekly_manager is not None}
-
-# Initialize predictor
-predictor = NFLPredictor(API_KEY)
+@app.get("/health")
+async def health_check():
+    """Health check endpoint"""
+    try:
+        with engine.connect() as conn:
+            result = conn.execute("SELECT 1").scalar()
+            return {
+                "status": "healthy",
+                "database": "connected",
+                "weekly_manager": "initialized" if weekly_manager else "not initialized"
+            }
+    except Exception as e:
+        logger.error(f"Health check failed: {e}")
+        return {
+            "status": "unhealthy",
+            "error": str(e)
+        }
 
 @app.get("/schedule")
 async def get_schedule():
     """Get upcoming NFL games schedule"""
     try:
         logger.info("Fetching NFL schedule...")
+        if not weekly_manager:
+            raise HTTPException(status_code=503, detail="Service not initialized")
 
-        # Only updates if more than 7 days have passed
+        # Update if needed
         weekly_manager.update_weekly_data()
 
         # Get schedule from cache
         schedule_list = weekly_manager.get_cached_schedule()
-
         logger.info(f"Found {len(schedule_list)} upcoming games")
 
         return {
             "success": True,
             "schedule": schedule_list
         }
-
     except Exception as e:
-        logger.error(f"Error fetching schedule: {str(e)}")
-        raise HTTPException(
-            status_code=500,
-            detail=str(e)
-        )
+        logger.error(f"Error fetching schedule: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 @app.get("/predict/{game_id}")
 async def get_prediction(game_id: int):
     try:
