@@ -26,8 +26,8 @@ async def lifespan(app: FastAPI):
 
         # Test database connection first
         with engine.connect() as connection:
-            # Test if we can query team_mapping
-            result = connection.execute(text("SELECT COUNT(*) FROM public.team_mapping"))
+            # Test connection with text() wrapper
+            result = connection.execute(text("SELECT COUNT(*) FROM team_mapping"))
             count = result.scalar()
             logger.info(f"Found {count} teams in database")
 
@@ -61,13 +61,21 @@ app.add_middleware(
 async def health_check():
     """Health check endpoint"""
     try:
-        # Test database connection
-        with SessionLocal() as db:
-            result = db.query(TeamMapping).count()
+        # Test database connection with proper SQL execution
+        with engine.connect() as connection:
+            result = connection.execute(text("SELECT 1"))
+            value = result.scalar()
+
+            # Also test team_mapping access
+            team_count = connection.execute(
+                text("SELECT COUNT(*) FROM team_mapping")
+            ).scalar()
+
             return {
                 "status": "healthy",
                 "database": "connected",
-                "teams_count": result,
+                "connection_test": value == 1,
+                "teams_count": team_count,
                 "weekly_manager": "initialized" if weekly_manager else "not initialized"
             }
     except Exception as e:
@@ -102,17 +110,21 @@ async def get_schedule():
 async def get_teams():
     """Get all teams"""
     try:
-        with SessionLocal() as db:
-            teams = db.query(TeamMapping).all()
+        with engine.connect() as connection:
+            result = connection.execute(
+                text("SELECT team_identifier, team_id, team_name FROM team_mapping")
+            )
+            teams = [
+                {
+                    "identifier": row[0],
+                    "id": row[1],
+                    "name": row[2]
+                }
+                for row in result
+            ]
             return {
                 "success": True,
-                "teams": [
-                    {
-                        "identifier": team.team_identifier,
-                        "id": team.team_id,
-                        "name": team.team_name
-                    } for team in teams
-                ]
+                "teams": teams
             }
     except Exception as e:
         logger.error(f"Error fetching teams: {e}")
