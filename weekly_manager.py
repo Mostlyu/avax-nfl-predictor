@@ -38,7 +38,11 @@ class NFLWeeklyDataManager:
         try:
             # Check if we need to initialize
             logger.info("Checking team mapping...")
-            existing_count = self.db.query(TeamMapping).count()
+            # Use text() for raw SQL with schema
+            result = self.db.execute(
+                text("SELECT COUNT(*) FROM public.team_mapping")
+            )
+            existing_count = result.scalar()
             logger.info(f"Found {existing_count} existing team mappings")
 
             if existing_count == 0:
@@ -55,13 +59,19 @@ class NFLWeeklyDataManager:
 
                 for team in teams:
                     if name := team.get('name'):
-                        mapping = TeamMapping(
-                            team_identifier=name.lower(),
-                            team_id=team.get('id'),
-                            team_name=name,
-                            last_updated=datetime.utcnow()
+                        self.db.execute(
+                            text("""
+                                INSERT INTO public.team_mapping
+                                (team_identifier, team_id, team_name, last_updated)
+                                VALUES (:identifier, :team_id, :name, :updated)
+                            """),
+                            {
+                                'identifier': name.lower(),
+                                'team_id': team.get('id'),
+                                'name': name,
+                                'updated': datetime.utcnow()
+                            }
                         )
-                        self.db.add(mapping)
 
                 self.db.commit()
                 logger.info("Team mapping initialized successfully")
@@ -76,9 +86,6 @@ class NFLWeeklyDataManager:
     def get_cached_schedule(self):
         """Get schedule from cache"""
         try:
-            db = SessionLocal()
-            current_time = datetime.now()
-
             # Return mock data for testing
             return [
                 {
@@ -102,7 +109,6 @@ class NFLWeeklyDataManager:
                     "status": "Not Started"
                 }
             ]
-
         except Exception as e:
             logger.error(f"Error fetching cached schedule: {e}")
             return []
