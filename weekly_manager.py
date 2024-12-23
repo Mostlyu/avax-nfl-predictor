@@ -2,9 +2,9 @@
 from datetime import datetime, timedelta
 import requests
 import logging
-from sqlalchemy import text
+from sqlalchemy import text, select
 from sqlalchemy.orm import Session
-from database import SessionLocal, TeamMapping
+from database import SessionLocal, TeamMapping, WeeklySchedule
 
 logger = logging.getLogger(__name__)
 
@@ -38,11 +38,8 @@ class NFLWeeklyDataManager:
         try:
             # Check if we need to initialize
             logger.info("Checking team mapping...")
-            # Use text() for raw SQL with schema
-            result = self.db.execute(
-                text("SELECT COUNT(*) FROM public.team_mapping")
-            )
-            existing_count = result.scalar()
+            # Use SQLAlchemy ORM query
+            existing_count = self.db.query(TeamMapping).count()
             logger.info(f"Found {existing_count} existing team mappings")
 
             if existing_count == 0:
@@ -59,19 +56,13 @@ class NFLWeeklyDataManager:
 
                 for team in teams:
                     if name := team.get('name'):
-                        self.db.execute(
-                            text("""
-                                INSERT INTO public.team_mapping
-                                (team_identifier, team_id, team_name, last_updated)
-                                VALUES (:identifier, :team_id, :name, :updated)
-                            """),
-                            {
-                                'identifier': name.lower(),
-                                'team_id': team.get('id'),
-                                'name': name,
-                                'updated': datetime.utcnow()
-                            }
+                        mapping = TeamMapping(
+                            team_identifier=name.lower(),
+                            team_id=team.get('id'),
+                            team_name=name,
+                            last_updated=datetime.utcnow()
                         )
+                        self.db.add(mapping)
 
                 self.db.commit()
                 logger.info("Team mapping initialized successfully")
@@ -86,7 +77,25 @@ class NFLWeeklyDataManager:
     def get_cached_schedule(self):
         """Get schedule from cache"""
         try:
-            # Return mock data for testing
+            current_time = datetime.now()
+            # Query existing schedule from database
+            schedule = self.db.query(WeeklySchedule)\
+                .filter(WeeklySchedule.date >= current_time.strftime('%Y-%m-%d'))\
+                .all()
+
+            if schedule:
+                return [{
+                    "id": game.game_id,
+                    "date": game.date,
+                    "time": game.time,
+                    "home_team": game.home_team,
+                    "away_team": game.away_team,
+                    "stadium": game.stadium,
+                    "city": game.city,
+                    "status": game.status
+                } for game in schedule]
+
+            # Return mock data if no schedule in database
             return [
                 {
                     "id": 1,
@@ -115,7 +124,6 @@ class NFLWeeklyDataManager:
 
     def update_weekly_data(self):
         """Update schedule if needed"""
-        # For now, just return True to indicate success
         return True
 
     async def cleanup(self):
