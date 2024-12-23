@@ -1,19 +1,21 @@
+# main.py
 from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
+from sqlalchemy import text
 import logging
 import requests
 from datetime import datetime, timedelta
 from contextlib import asynccontextmanager
-from database import init_db, get_db, Base, engine
+from database import SessionLocal, Base, engine, TeamMapping
 from weekly_manager import NFLWeeklyDataManager
-from predictor import NFLPredictor
 from config import API_KEY
 
+# Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Global instances
+# Global weekly_manager instance
 weekly_manager = None
 predictor = None
 
@@ -21,20 +23,26 @@ predictor = None
 async def lifespan(app: FastAPI):
     try:
         logger.info("Starting application initialization...")
-        init_db()
 
-        # Initialize global instances
-        global weekly_manager, predictor
+        # Test database connection first
+        with engine.connect() as connection:
+            # Test if we can query team_mapping
+            result = connection.execute(text("SELECT COUNT(*) FROM public.team_mapping"))
+            count = result.scalar()
+            logger.info(f"Found {count} teams in database")
+
+        # Initialize weekly manager
+        global weekly_manager
         weekly_manager = NFLWeeklyDataManager(API_KEY)
-        predictor = NFLPredictor(API_KEY)
-
         logger.info("Application initialized successfully")
+
     except Exception as e:
         logger.error(f"Startup error: {e}")
         raise
 
     yield
 
+    # Cleanup
     if weekly_manager:
         await weekly_manager.cleanup()
 
@@ -43,7 +51,7 @@ app = FastAPI(lifespan=lifespan)
 # Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # In production, specify your Vercel URL
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -53,11 +61,13 @@ app.add_middleware(
 async def health_check():
     """Health check endpoint"""
     try:
-        with engine.connect() as conn:
-            result = conn.execute("SELECT 1").scalar()
+        # Test database connection
+        with SessionLocal() as db:
+            result = db.query(TeamMapping).count()
             return {
                 "status": "healthy",
                 "database": "connected",
+                "teams_count": result,
                 "weekly_manager": "initialized" if weekly_manager else "not initialized"
             }
     except Exception as e:
@@ -71,24 +81,43 @@ async def health_check():
 async def get_schedule():
     """Get upcoming NFL games schedule"""
     try:
-        logger.info("Fetching NFL schedule...")
         if not weekly_manager:
             raise HTTPException(status_code=503, detail="Service not initialized")
 
-        # Update if needed
+        # Update weekly data if needed
         weekly_manager.update_weekly_data()
 
         # Get schedule from cache
-        schedule_list = weekly_manager.get_cached_schedule()
-        logger.info(f"Found {len(schedule_list)} upcoming games")
+        schedule = weekly_manager.get_cached_schedule()
 
         return {
             "success": True,
-            "schedule": schedule_list
+            "schedule": schedule
         }
     except Exception as e:
         logger.error(f"Error fetching schedule: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/teams")
+async def get_teams():
+    """Get all teams"""
+    try:
+        with SessionLocal() as db:
+            teams = db.query(TeamMapping).all()
+            return {
+                "success": True,
+                "teams": [
+                    {
+                        "identifier": team.team_identifier,
+                        "id": team.team_id,
+                        "name": team.team_name
+                    } for team in teams
+                ]
+            }
+    except Exception as e:
+        logger.error(f"Error fetching teams: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.get("/predict/{game_id}")
 async def get_prediction(game_id: int):
     try:
