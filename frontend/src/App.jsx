@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react'
 import { useAccount, useConnect, useReadContract, useWriteContract } from 'wagmi'
 import { injected } from 'wagmi/connectors'
 import { parseEther } from 'viem'
+import { API_URL } from './config';
 
 // Contract details
 const CONTRACT_ADDRESS = '0xde5c1e5DdE61FF85288320434a85d73e1f0CafED'
@@ -171,15 +172,11 @@ function App() {
   const fetchGames = async () => {
     try {
       setLoading(true);
+      // Use environment variable for API URL
       const apiUrl = import.meta.env.VITE_API_URL;
-      console.log('Fetching from:', apiUrl); // Debug log
+      console.log('Using API URL:', apiUrl); // Debug log
 
-      const response = await fetch(`${apiUrl}/schedule`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json'
-        }
-      });
+      const response = await fetch(`${apiUrl}/schedule`);
 
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
@@ -188,19 +185,18 @@ function App() {
       const data = await response.json();
       console.log('Received data:', data); // Debug log
 
-      if (data.success && data.schedule) {
+      if (data.success) {
         setGames(data.schedule);
-        setError(null);
       } else {
-        setError('Invalid data format received');
+        setError('Failed to fetch games');
       }
     } catch (err) {
       console.error('Error fetching games:', err);
-      setError(`Error loading games schedule: ${err.message}`);
+      setError('Error loading games schedule');
     } finally {
       setLoading(false);
     }
-  }
+  };
 
   // New handleGetPrediction function
   const handleGetPrediction = async () => {
