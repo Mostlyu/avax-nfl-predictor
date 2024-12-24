@@ -45,11 +45,12 @@ class TeamStats(Base):
 
 class TeamMapping(Base):
     __tablename__ = 'team_mapping'
+    __table_args__ = {'schema': 'public'}
 
     team_identifier = Column(String, primary_key=True)
     team_id = Column(Integer)
     team_name = Column(String)
-    last_updated = Column(DateTime, default=datetime.utcnow)
+    last_updated = Column(DateTime, default=datetime.now(datetime.timezone.utc))
 
 class QBStats(Base):
     __tablename__ = 'qb_stats'

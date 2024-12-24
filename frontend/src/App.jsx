@@ -170,20 +170,35 @@ function App() {
 
   const fetchGames = async () => {
     try {
-      setLoading(true)
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
-      const response = await fetch(`${apiUrl}/schedule`)
-      const data = await response.json()
-      if (data.success) {
-        setGames(data.schedule)
+      setLoading(true);
+      const apiUrl = import.meta.env.VITE_API_URL;
+      console.log('Fetching from:', apiUrl); // Debug log
+
+      const response = await fetch(`${apiUrl}/schedule`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      console.log('Received data:', data); // Debug log
+
+      if (data.success && data.schedule) {
+        setGames(data.schedule);
+        setError(null);
       } else {
-        setError('Failed to fetch games')
+        setError('Invalid data format received');
       }
     } catch (err) {
-      console.error('Error fetching games:', err)
-      setError('Error loading games schedule')
+      console.error('Error fetching games:', err);
+      setError(`Error loading games schedule: ${err.message}`);
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
   }
 
