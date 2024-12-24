@@ -50,7 +50,7 @@ class TeamMapping(Base):
     team_identifier = Column(String, primary_key=True)
     team_id = Column(Integer)
     team_name = Column(String)
-    last_updated = Column(DateTime, default=datetime.now(datetime.timezone.utc))
+    last_updated = Column(DateTime, default=datetime.now(datetime.astimezone.utc))
 
 class QBStats(Base):
     __tablename__ = 'qb_stats'
