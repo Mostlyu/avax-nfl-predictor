@@ -4,7 +4,7 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 import os
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -50,7 +50,7 @@ class TeamMapping(Base):
     team_identifier = Column(String, primary_key=True)
     team_id = Column(Integer)
     team_name = Column(String)
-    last_updated = Column(DateTime, default=datetime.now(datetime.astimezone.utc))
+    last_updated = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
 class QBStats(Base):
     __tablename__ = 'qb_stats'
