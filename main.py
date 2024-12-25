@@ -10,14 +10,13 @@ from config import API_KEY
 from contextlib import asynccontextmanager
 from database import init_db, get_db
 from weekly_manager import NFLWeeklyDataManager
-from config import API_KEY
 import logging
 import requests
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Global weekly_manager instance
+# Global instances
 weekly_manager = None
 predictor = None
 
@@ -30,7 +29,7 @@ async def lifespan(app: FastAPI):
 
         global weekly_manager, predictor
         weekly_manager = NFLWeeklyDataManager(API_KEY)
-        predictor = NFLPredictor(API_KEY)  # Initialize predictor here
+        predictor = NFLPredictor(API_KEY)
         logger.info("Weekly manager and predictor initialized successfully")
 
         yield
@@ -44,22 +43,25 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 
-# Add CORS middleware
+# Configure CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["*"],  # Allows all origins
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["*"],  # Allows all methods
+    allow_headers=["*"],  # Allows all headers
+    expose_headers=["*"]  # Expose all headers
 )
 
 @app.get("/health")
 async def health_check():
+    """Health check endpoint"""
     try:
         return {
             "status": "healthy",
             "database": "connected",
             "weekly_manager": "initialized" if weekly_manager else "not initialized",
+            "predictor": "initialized" if predictor else "not initialized",
             "timestamp": datetime.now().isoformat()
         }
     except Exception as e:
@@ -84,7 +86,6 @@ async def get_schedule():
                 "schedule": []
             }
 
-        # Return the schedule directly - it's already properly formatted
         logger.info(f"Found {len(schedule_list)} upcoming games")
         return {
             "success": True,
@@ -93,10 +94,10 @@ async def get_schedule():
 
     except Exception as e:
         logger.error(f"Error fetching schedule: {str(e)}")
-        raise HTTPException(
-            status_code=500,
-            detail=str(e)
-        )
+        return {
+            "success": False,
+            "error": str(e)
+        }
 
 @app.get("/predict/{game_id}")
 async def get_prediction(game_id: int):
