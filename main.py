@@ -17,7 +17,7 @@ import requests
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Initialize weekly data manager (after your other initializations)
+# Global weekly_manager instance
 weekly_manager = None
 predictor = None
 
@@ -43,7 +43,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 
-## Add CORS middleware
+# Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -53,8 +53,7 @@ app.add_middleware(
 )
 
 @app.get("/health")
-async def health_check(db: Session = Depends(get_db)):
-    """Health check endpoint"""
+async def health_check():
     try:
         return {
             "status": "healthy",
@@ -74,49 +73,23 @@ async def get_schedule():
     """Get upcoming NFL games schedule"""
     try:
         logger.info("Fetching NFL schedule...")
-
-        if not weekly_manager:
-            raise HTTPException(
-                status_code=500,
-                detail="Weekly manager not initialized"
-            )
-
-        # Update weekly data if needed
         weekly_manager.update_weekly_data()
-
-        # Get schedule from manager
         schedule_list = weekly_manager.get_cached_schedule()
 
         if not schedule_list:
-            raise HTTPException(
-                status_code=404,
-                detail="No upcoming games found"
-            )
-
-        logger.info(f"Found {len(schedule_list)} upcoming games")
-
-        # Format the schedule data
-        formatted_schedule = []
-        for game in schedule_list:
-            formatted_game = {
-                "id": game.get("id"),
-                "date": game.get("date"),
-                "time": game.get("time"),
-                "home_team": game.get("teams", {}).get("home", {}).get("name"),
-                "away_team": game.get("teams", {}).get("away", {}).get("name"),
-                "stadium": game.get("game", {}).get("venue", {}).get("name"),
-                "city": game.get("game", {}).get("venue", {}).get("city"),
-                "status": game.get("game", {}).get("status", {}).get("description", "Not Started")
+            logger.warning("No games found")
+            return {
+                "success": True,
+                "schedule": []
             }
-            formatted_schedule.append(formatted_game)
 
+        # Return the schedule directly - it's already properly formatted
+        logger.info(f"Found {len(schedule_list)} upcoming games")
         return {
             "success": True,
-            "schedule": formatted_schedule
+            "schedule": schedule_list
         }
 
-    except HTTPException as he:
-        raise he
     except Exception as e:
         logger.error(f"Error fetching schedule: {str(e)}")
         raise HTTPException(

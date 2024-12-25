@@ -22,65 +22,58 @@ class NFLWeeklyDataManager:
     async def cleanup(self):
         logger.info("Cleaning up NFLWeeklyDataManager")
 
-    def fetch_games_for_date(self, date_str):
-        """Fetch games for a specific date"""
-        try:
-            response = requests.get(
-                f"{self.base_url}/games",
-                headers=self.headers,
-                params={
-                    "league": "1",
-                    "season": "2024",
-                    "date": date_str
-                }
-            )
-            response.raise_for_status()
-            return response.json().get("response", [])
-        except Exception as e:
-            logger.error(f"Error fetching games for date {date_str}: {e}")
-            return []
-
     def update_weekly_data(self):
         """Update weekly data if needed"""
         current_time = datetime.now()
 
+        # Only update if cache is empty or older than 6 hours
         if (not self.cached_schedule or
             not self.last_update or
             (current_time - self.last_update) > timedelta(hours=6)):
 
             try:
+                current_year = datetime.now().year
+                season = current_year if datetime.now().month > 6 else current_year - 1
+
+                logger.info(f"Fetching NFL games for season {season}")
+
+                # Fetch games for next 7 days
                 formatted_games = []
-                # Fetch games for the next 7 days
                 for i in range(7):
                     date = current_time + timedelta(days=i)
                     date_str = date.strftime('%Y-%m-%d')
-                    logger.info(f"Fetching games for date: {date_str}")
 
-                    games = self.fetch_games_for_date(date_str)
+                    response = requests.get(
+                        f"{self.base_url}/games",
+                        headers=self.headers,
+                        params={
+                            "league": "1",
+                            "season": str(season),
+                            "date": date_str
+                        }
+                    )
+                    response.raise_for_status()
+                    games_data = response.json()
 
-                    for game in games:
-                        try:
-                            game_info = game["game"]
-                            teams = game["teams"]
-                            venue = game_info["venue"]
-                            date_info = game_info["date"]
-                            status = game_info["status"]
-
-                            formatted_game = {
-                                "id": game_info["id"],
-                                "date": date_info["date"],
-                                "time": date_info["time"],
-                                "home_team": teams["home"]["name"],
-                                "away_team": teams["away"]["name"],
-                                "stadium": venue["name"],
-                                "city": venue["city"],
-                                "status": status["long"]
-                            }
-                            formatted_games.append(formatted_game)
-                            logger.info(f"Processed game: {formatted_game}")
-                        except Exception as e:
-                            logger.error(f"Error formatting game: {e}")
-                            continue
+                    if games_data.get("response"):
+                        for game in games_data["response"]:
+                            try:
+                                # Access the nested structure correctly
+                                formatted_game = {
+                                    "id": game["game"]["id"],
+                                    "date": game["game"]["date"]["date"],
+                                    "time": game["game"]["date"]["time"],
+                                    "home_team": game["teams"]["home"]["name"],
+                                    "away_team": game["teams"]["away"]["name"],
+                                    "stadium": game["game"]["venue"]["name"],
+                                    "city": game["game"]["venue"]["city"],
+                                    "status": game["game"]["status"]["long"]
+                                }
+                                formatted_games.append(formatted_game)
+                                logger.info(f"Processed game: {formatted_game}")
+                            except (KeyError, TypeError) as e:
+                                logger.error(f"Error processing game: {e}")
+                                continue
 
                 self.cached_schedule = formatted_games
                 self.last_update = current_time
