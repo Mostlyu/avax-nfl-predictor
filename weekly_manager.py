@@ -31,7 +31,6 @@ class NFLWeeklyDataManager:
             (current_time - self.last_update) > timedelta(hours=6)):
 
             try:
-                # Get current NFL season
                 current_year = datetime.now().year
                 season = current_year if datetime.now().month > 6 else current_year - 1
 
@@ -47,65 +46,45 @@ class NFLWeeklyDataManager:
                     }
                 )
 
-                # Log raw response for debugging
-                logger.info(f"API Response Status: {response.status_code}")
-                logger.info(f"API Response Headers: {response.headers}")
-                logger.info(f"API Response Content: {response.text[:500]}...")  # First 500 chars
-
                 response.raise_for_status()
                 games_data = response.json()
-
-                logger.info(f"Parsed JSON data: {games_data.keys()}")
 
                 if games_data.get("response"):
                     formatted_games = []
                     for game in games_data["response"]:
-                        logger.info(f"Processing game: {game}")  # Log each game object
                         try:
+                            # Extract data from the correct nested structure
+                            game_info = game["game"]
+                            teams = game["teams"]
+                            venue = game_info["venue"]
+                            date_info = game_info["date"]
+                            status = game_info["status"]
+
                             formatted_game = {
-                                "id": game.get("id"),
-                                "date": game.get("date", {}).get("date"),
-                                "time": game.get("date", {}).get("time"),
-                                "home_team": game.get("teams", {}).get("home", {}).get("name"),
-                                "away_team": game.get("teams", {}).get("away", {}).get("name"),
-                                "stadium": game.get("venue", {}).get("name"),
-                                "city": game.get("venue", {}).get("city"),
-                                "status": game.get("status", {}).get("long", "Not Started")
+                                "id": game_info["id"],
+                                "date": date_info["date"],
+                                "time": date_info["time"],
+                                "home_team": teams["home"]["name"],
+                                "away_team": teams["away"]["name"],
+                                "stadium": venue["name"],
+                                "city": venue["city"],
+                                "status": status["long"]
                             }
-                            logger.info(f"Formatted game: {formatted_game}")
                             formatted_games.append(formatted_game)
+                            logger.info(f"Processed game: {formatted_game}")
+                        except KeyError as e:
+                            logger.error(f"Error accessing game data: {e}")
+                            continue
                         except Exception as e:
-                            logger.error(f"Error formatting game: {e}")
+                            logger.error(f"Unexpected error formatting game: {e}")
                             continue
 
                     self.cached_schedule = formatted_games
                     self.last_update = current_time
                     logger.info(f"Updated schedule cache with {len(formatted_games)} games")
                 else:
-                    # If no games found, use mock data for testing
-                    logger.warning("No games found, using mock data")
-                    self.cached_schedule = [
-                        {
-                            "id": 1,
-                            "date": "2024-12-25",
-                            "time": "16:30",
-                            "home_team": "San Francisco 49ers",
-                            "away_team": "Baltimore Ravens",
-                            "stadium": "Levi's Stadium",
-                            "city": "Santa Clara",
-                            "status": "Not Started"
-                        },
-                        {
-                            "id": 2,
-                            "date": "2024-12-25",
-                            "time": "20:00",
-                            "home_team": "Kansas City Chiefs",
-                            "away_team": "Las Vegas Raiders",
-                            "stadium": "Arrowhead Stadium",
-                            "city": "Kansas City",
-                            "status": "Not Started"
-                        }
-                    ]
+                    logger.warning("No games found in API response")
+                    self.cached_schedule = []
 
             except requests.exceptions.RequestException as e:
                 logger.error(f"Error fetching NFL data: {str(e)}")
