@@ -175,30 +175,33 @@ function App() {
       setError(null);
 
       const apiUrl = import.meta.env.VITE_API_URL;
-      console.log('Fetching games from:', apiUrl);
+      console.log('Fetching from:', apiUrl); // Debug log
 
-      const response = await fetch(`${apiUrl}/schedule`);
+      const response = await fetch(`${apiUrl}/schedule`, {
+        headers: {
+          'Accept': 'application/json',
+          'Cache-Control': 'no-cache'
+        }
+      });
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => null);
-        throw new Error(errorData?.detail || `HTTP error! status: ${response.status}`);
+        throw new Error(`HTTP error! status: ${response.status}`);
       }
 
       const data = await response.json();
-      console.log('Schedule data received:', data);
+      console.log('Received data:', data); // Debug log
 
       if (data.success && Array.isArray(data.schedule)) {
         const sortedGames = data.schedule
-          .filter(game => game.date && game.time) // Filter out games without date/time
+          .filter(game => game.home_team && game.away_team) // Filter out games with missing teams
           .sort((a, b) => {
-            // Sort by date and time
-            const dateA = new Date(`${a.date} ${a.time}`);
-            const dateB = new Date(`${b.date} ${b.time}`);
-            return dateA - dateB;
+            const dateTimeA = new Date(`${a.date} ${a.time}`);
+            const dateTimeB = new Date(`${b.date} ${b.time}`);
+            return dateTimeA - dateTimeB;
           });
 
+        console.log('Sorted games:', sortedGames); // Debug log
         setGames(sortedGames);
-        setError(null);
       } else {
         throw new Error('Invalid schedule data format');
       }
