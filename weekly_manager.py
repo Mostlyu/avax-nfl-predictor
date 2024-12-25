@@ -22,6 +22,24 @@ class NFLWeeklyDataManager:
     async def cleanup(self):
         logger.info("Cleaning up NFLWeeklyDataManager")
 
+    def fetch_games_for_date(self, date_str):
+        """Fetch games for a specific date"""
+        try:
+            response = requests.get(
+                f"{self.base_url}/games",
+                headers=self.headers,
+                params={
+                    "league": "1",
+                    "season": "2024",
+                    "date": date_str
+                }
+            )
+            response.raise_for_status()
+            return response.json().get("response", [])
+        except Exception as e:
+            logger.error(f"Error fetching games for date {date_str}: {e}")
+            return []
+
     def update_weekly_data(self):
         """Update weekly data if needed"""
         current_time = datetime.now()
@@ -31,29 +49,17 @@ class NFLWeeklyDataManager:
             (current_time - self.last_update) > timedelta(hours=6)):
 
             try:
-                current_year = datetime.now().year
-                season = current_year if datetime.now().month > 6 else current_year - 1
+                formatted_games = []
+                # Fetch games for the next 7 days
+                for i in range(7):
+                    date = current_time + timedelta(days=i)
+                    date_str = date.strftime('%Y-%m-%d')
+                    logger.info(f"Fetching games for date: {date_str}")
 
-                logger.info(f"Fetching NFL games for season {season}")
+                    games = self.fetch_games_for_date(date_str)
 
-                response = requests.get(
-                    f"{self.base_url}/games",
-                    headers=self.headers,
-                    params={
-                        "league": "1",
-                        "season": str(season),
-                        "date": datetime.now().strftime('%Y-%m-%d')
-                    }
-                )
-
-                response.raise_for_status()
-                games_data = response.json()
-
-                if games_data.get("response"):
-                    formatted_games = []
-                    for game in games_data["response"]:
+                    for game in games:
                         try:
-                            # Extract data from the correct nested structure
                             game_info = game["game"]
                             teams = game["teams"]
                             venue = game_info["venue"]
@@ -72,27 +78,16 @@ class NFLWeeklyDataManager:
                             }
                             formatted_games.append(formatted_game)
                             logger.info(f"Processed game: {formatted_game}")
-                        except KeyError as e:
-                            logger.error(f"Error accessing game data: {e}")
-                            continue
                         except Exception as e:
-                            logger.error(f"Unexpected error formatting game: {e}")
+                            logger.error(f"Error formatting game: {e}")
                             continue
 
-                    self.cached_schedule = formatted_games
-                    self.last_update = current_time
-                    logger.info(f"Updated schedule cache with {len(formatted_games)} games")
-                else:
-                    logger.warning("No games found in API response")
-                    self.cached_schedule = []
+                self.cached_schedule = formatted_games
+                self.last_update = current_time
+                logger.info(f"Updated schedule cache with {len(formatted_games)} games")
 
-            except requests.exceptions.RequestException as e:
-                logger.error(f"Error fetching NFL data: {str(e)}")
-                if not self.cached_schedule:
-                    self.cached_schedule = []
-                raise
             except Exception as e:
-                logger.error(f"Unexpected error: {str(e)}")
+                logger.error(f"Error updating weekly data: {e}")
                 if not self.cached_schedule:
                     self.cached_schedule = []
                 raise
