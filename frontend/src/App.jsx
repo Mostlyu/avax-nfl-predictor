@@ -229,11 +229,11 @@ function App() {
     try {
       // Check if prediction has been paid for
       console.log('Checking payment status...')
-      const access = await checkAccess()
-      console.log('Access status:', access)
+      const accessResult = await refetchAccess() // Use refetchAccess instead of checkAccess
+      console.log('Access status:', accessResult)
 
       // Only request payment if user hasn't paid
-      if (!access.data) {
+      if (!accessResult?.data) {
         // If not paid, request payment
         console.log('Payment required, requesting payment...')
         try {
@@ -241,14 +241,16 @@ function App() {
             address: CONTRACT_ADDRESS,
             abi: ABI,
             functionName: 'purchasePrediction',
-            args: [selectedGame.id],
+            args: [BigInt(selectedGame.id)], // Convert to BigInt
             value: parseEther('0.07')
           })
 
           // Wait for transaction confirmation
           console.log('Waiting for transaction confirmation...')
-          await tx.wait() // This will throw if tx fails or is cancelled
-
+          const receipt = await tx.wait() // Wait for transaction confirmation
+          if (!receipt) {
+            throw new Error('Transaction failed')
+          }
           console.log('Payment confirmed')
         } catch (paymentError) {
           console.error('Payment error:', paymentError)
@@ -260,7 +262,7 @@ function App() {
         console.log('Already paid for this prediction')
       }
 
-      // Only get prediction if payment was successful or previously paid
+      // Only proceed if payment was successful or previously paid
       const response = await fetch(`http://localhost:8000/predict/${selectedGame.id}`)
       const data = await response.json()
 
