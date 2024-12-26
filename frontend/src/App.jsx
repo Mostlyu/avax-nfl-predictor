@@ -237,7 +237,7 @@ function App() {
         setError('Please confirm the transaction in MetaMask...')
 
         try {
-          const hash = await writeContract({
+          const txResponse = await writeContract({
             address: CONTRACT_ADDRESS,
             abi: ABI,
             functionName: 'purchasePrediction',
@@ -245,51 +245,53 @@ function App() {
             value: parseEther('0.07')
           })
 
-          console.log('Transaction hash:', hash)
+          console.log('Transaction hash:', txResponse)
           setError('Transaction submitted. View on Snowtrace: ' +
-            `https://snowtrace.io/tx/${hash}`)
+            `https://snowtrace.io/tx/${txResponse}`)
 
+          // Wait for transaction confirmation
           await new Promise(resolve => setTimeout(resolve, 5000))
-          await refetchAccess()
+
+          // Check access again after payment
+          const newAccessResult = await refetchAccess()
+          if (!newAccessResult.data) {
+            throw new Error('Payment verification failed. Please try again.')
+          }
+
         } catch (txError) {
           console.error('Transaction error:', txError)
+          if (txError.message.includes('User rejected the transaction')) {
+            setError('Transaction cancelled. Prediction not purchased.')
+            setLoadingPrediction(false)
+            return // Exit the function if transaction was cancelled
+          }
           if (txError.message.includes('insufficient funds')) {
             throw new Error('Insufficient AVAX balance. Please make sure you have enough AVAX to cover the prediction cost and gas fees.')
-          } else if (txError.message.includes('rejected')) {
-            throw new Error('Transaction was rejected. Please try again.')
           }
           throw txError
         }
       }
 
-      // Use import.meta.env instead of process.env
+      // Only proceed to fetch prediction if user has access
       const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
       console.log('Fetching prediction for game:', selectedGame.id)
 
-      try {
-        const response = await fetch(`${apiUrl}/predict/${selectedGame.id}`)
-        const data = await response.json()
+      const response = await fetch(`${apiUrl}/predict/${selectedGame.id}`)
+      const data = await response.json()
 
-        console.log('Prediction response:', data)
+      console.log('Prediction response:', data)
 
-        if (!response.ok) {
-          throw new Error(data.error || `Server error: ${response.status}`)
-        }
+      if (!response.ok) {
+        throw new Error(data.error || `Server error: ${response.status}`)
+      }
 
-        if (data.success && data.prediction) {
-          setError(null)
-          setPrediction(data.prediction)
-        } else if (data.error) {
-          throw new Error(data.error)
-        } else {
-          throw new Error('No prediction data available for this game')
-        }
-      } catch (fetchError) {
-        console.error('Prediction fetch error:', fetchError)
-        if (fetchError.message.includes('Failed to fetch')) {
-          throw new Error('Unable to connect to prediction server. Please try again later.')
-        }
-        throw fetchError
+      if (data.success && data.prediction) {
+        setError(null)
+        setPrediction(data.prediction)
+      } else if (data.error) {
+        throw new Error(data.error)
+      } else {
+        throw new Error('No prediction data available for this game')
       }
 
     } catch (err) {
