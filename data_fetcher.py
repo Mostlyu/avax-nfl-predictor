@@ -36,6 +36,90 @@ class NFLDataFetcher:
         #for key in self.team_mapping.keys():
         #    print(f"- {key}")
 
+    def _initialize_team_mapping(self) -> Dict:
+        """Initialize team mapping from API"""
+        url = f"{self.base_url}/teams"
+        params = {
+            'league': '1',
+            'season': '2024'
+        }
+
+        try:
+            response = requests.get(url, headers=self.headers, params=params)
+            response.raise_for_status()
+            teams = response.json()['response']
+
+            # Clear existing mappings
+            self.cursor.execute('DELETE FROM team_mapping')
+
+            mapping = {}
+            for team in teams:
+                team_name = team['name']
+                team_id = team['id']
+
+                # Store in database
+                self.cursor.execute('''
+                    INSERT OR REPLACE INTO team_mapping
+                    (team_name, api_id, last_updated)
+                    VALUES (?, ?, datetime('now'))
+                ''', (team_name, team_id))
+
+                # Add to in-memory mapping
+                mapping[team_name.lower()] = {
+                    'name': team_name,
+                    'id': team_id
+                }
+
+            self.conn.commit()
+            return mapping
+
+        except Exception as e:
+            logger.error(f"Error initializing team mapping: {e}")
+            return {}
+
+    def init_db_connection(self):
+        """Initialize database connection and tables"""
+        try:
+            self.conn = sqlite3.connect(self.db_path)
+            self.cursor = self.conn.cursor()
+
+            # Create team_mapping table
+            self.cursor.execute('''
+                CREATE TABLE IF NOT EXISTS team_mapping (
+                    team_name TEXT PRIMARY KEY,
+                    api_id INTEGER,
+                    last_updated TIMESTAMP
+                )
+            ''')
+
+            # Create team_stats table
+            self.cursor.execute('''
+                CREATE TABLE IF NOT EXISTS team_stats (
+                    game_id INTEGER,
+                    team_id INTEGER,
+                    stat_name TEXT,
+                    stat_value REAL,
+                    PRIMARY KEY (game_id, team_id, stat_name)
+                )
+            ''')
+
+            # Create qb_stats table
+            self.cursor.execute('''
+                CREATE TABLE IF NOT EXISTS qb_stats (
+                    game_id INTEGER,
+                    team_id INTEGER,
+                    player_id INTEGER,
+                    player_name TEXT,
+                    stat_name TEXT,
+                    stat_value REAL,
+                    PRIMARY KEY (game_id, team_id, player_id, stat_name)
+                )
+            ''')
+
+            self.conn.commit()
+            logger.info("Database tables created successfully")
+        except Exception as e:
+            logger.error(f"Database initialization error: {e}")
 
     def _make_api_call(self, url: str, params: Dict) -> Dict:
         """Centralized API call method with counter"""
@@ -127,75 +211,6 @@ class NFLDataFetcher:
 
         return cleaned_stats
 
-    def _initialize_team_mapping(self) -> Dict:
-        """Initialize team mapping from API"""
-        url = f"{self.base_url}/teams"
-        params = {
-            'league': '1',
-            'season': '2024'
-        }
-
-        try:
-            response = requests.get(url, headers=self.headers, params=params)
-            response.raise_for_status()
-            teams = response.json()['response']
-
-            # Create mappings for both code and name to team_id
-            mapping = {}
-            for team in teams:
-                if team.get('code'):  # Exclude NFC/AFC which have no code
-                    # Add full name mapping
-                    full_name = team['name'].lower()
-                    mapping[full_name] = {
-                        'id': team['id'],
-                        'name': team['name']
-                    }
-
-                    # Add team code mapping
-                    if team['code']:
-                        mapping[team['code'].lower()] = {
-                            'id': team['id'],
-                            'name': team['name']
-                        }
-
-                    # Add city name mapping
-                    if team['city']:
-                        mapping[team['city'].lower()] = {
-                            'id': team['id'],
-                            'name': team['name']
-                        }
-
-                    # Add nickname (last part of name) mapping
-                    nickname = team['name'].split()[-1].lower()
-                    mapping[nickname] = {
-                        'id': team['id'],
-                        'name': team['name']
-                    }
-
-                    variations = [
-                team['name'].lower(),                    # Full name
-                team['name'].split()[-1].lower(),        # Nickname
-                team['city'].lower() if team.get('city') else None  # City name
-            ]
-
-            for variation in variations:
-                if variation:
-                    self.cursor.execute('''
-                        INSERT OR REPLACE INTO team_mapping
-                        (team_identifier, team_id, team_name, last_updated)
-                        VALUES (?, ?, ?, datetime('now'))
-                    ''', (
-                        variation,
-                        team['id'],
-                        team['name']
-                    ))
-
-            return mapping
-
-        except Exception as e:
-            print(f"Error initializing team mapping: {e}")
-            return {}
-
     def verify_team_mapping(self):
         """Verify team mapping exists and reinitialize if needed"""
         try:
@@ -208,33 +223,37 @@ class NFLDataFetcher:
             print(f"Error verifying team mapping: {e}")
             self._initialize_team_mapping()
 
-    def get_team_info(self, team_identifier: str) -> Dict:
-        """Get team info from code or name"""
-        team_identifier = team_identifier.lower()
+    #def get_team_info(self, team_identifier: str) -> Dict:
+        #"""Get team info from code or name"""
+       # team_identifier = team_identifier.lower()
 
         # Print debugging info
         #print(f"\nLooking for team: {team_identifier}")
         #print("Available matches:", [k for k in self.team_mapping.keys() if team_identifier in k])
 
-        return self.team_mapping.get(team_identifier)
+        #return self.team_mapping.get(team_identifier)
 
-    def get_team_info(self, team_identifier: str) -> Dict:
-        """Get team info from cache or API"""
+    def get_team_info(self, team_name: str) -> Dict:
+        """Get team info from database"""
         try:
             self.cursor.execute('''
-                SELECT team_id, team_name
+                SELECT team_name, api_id
                 FROM team_mapping
-                WHERE team_identifier = ?
-            ''', (team_identifier.lower(),))
+                WHERE team_name = ?
+            ''', (team_name,))
+
             result = self.cursor.fetchone()
             if result:
                 return {
-                    'id': result[0],
-                    'name': result[1]
+                    'name': result[0],
+                    'id': result[1]
                 }
+
+            # If team not found, try to get it from API and cache it
+            return self._initialize_team_mapping().get(team_name.lower())
         except Exception as e:
-            print(f"Error getting team info: {e}")
-        return None
+            logger.error(f"Error getting team info: {e}")
+            return None
 
     def get_recent_games(self, team_id: int, limit: int = 3) -> List[int]:
         """Get the most recent games for a team"""
@@ -576,14 +595,6 @@ class NFLDataFetcher:
                             )
 
         return analysis
-
-    def init_db_connection(self):
-        """Initialize database connection"""
-        try:
-            self.conn = sqlite3.connect(self.db_path)
-            self.cursor = self.conn.cursor()
-        except Exception as e:
-            print(f"Database connection error: {e}")
 
     def _get_cached_team_mapping(self) -> Dict:
         """Get team mapping from cache or API"""
