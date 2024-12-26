@@ -55,6 +55,43 @@ class NFLPredictor(NFLDataFetcher):
         except Exception as e:
             logger.error(f"Error creating prediction tables: {e}")
 
+    def _init_team_mapping(self):
+        """Initialize team mapping table"""
+        try:
+            if not hasattr(self, 'cursor'):
+                self.init_db_connection()
+
+            self.cursor.execute('''
+                CREATE TABLE IF NOT EXISTS team_mapping (
+                    id INTEGER PRIMARY KEY,
+                    team_name TEXT UNIQUE,
+                    api_id INTEGER
+                )
+            ''')
+
+            # Insert initial team mappings if table is empty
+            self.cursor.execute('SELECT COUNT(*) FROM team_mapping')
+            count = self.cursor.fetchone()[0]
+
+            if count == 0:
+                teams = [
+                    ("Pittsburgh Steelers", 1),
+                    ("Kansas City Chiefs", 2),
+                    ("Houston Texans", 3),
+                    ("Baltimore Ravens", 4),
+                    # Add other NFL teams here...
+                ]
+
+                self.cursor.executemany(
+                    'INSERT OR IGNORE INTO team_mapping (team_name, api_id) VALUES (?, ?)',
+                    teams
+                )
+
+            self.conn.commit()
+            logger.info("Created and populated team_mapping table")
+        except Exception as e:
+            logger.error(f"Error creating team mapping table: {e}")
+
     def _init_odds_tables(self):
         """Initialize odds-related tables"""
         try:
