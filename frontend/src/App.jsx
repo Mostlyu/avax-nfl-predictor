@@ -227,54 +227,75 @@ function App() {
     setError(null)
 
     try {
-      // Check if prediction has been paid for
-      console.log('Checking payment status...')
-      const accessResult = await refetchAccess() // Use refetchAccess instead of checkAccess
-      console.log('Access status:', accessResult)
+      console.log('Checking if user has already paid...')
+      const accessResult = await refetchAccess()
+      const hasAccess = accessResult.data
+      console.log('Has access:', hasAccess)
 
-      // Only request payment if user hasn't paid
-      if (!accessResult?.data) {
-        // If not paid, request payment
-        console.log('Payment required, requesting payment...')
+      if (!hasAccess) {
+        console.log('Payment required, preparing transaction...')
+        setError('Please confirm the transaction in MetaMask...')
+
         try {
-          const tx = await writeContract({
+          const hash = await writeContract({
             address: CONTRACT_ADDRESS,
             abi: ABI,
             functionName: 'purchasePrediction',
-            args: [BigInt(selectedGame.id)], // Convert to BigInt
+            args: [BigInt(selectedGame.id)],
             value: parseEther('0.07')
           })
 
-          // Wait for transaction confirmation
-          console.log('Waiting for transaction confirmation...')
-          const receipt = await tx.wait() // Wait for transaction confirmation
-          if (!receipt) {
-            throw new Error('Transaction failed')
+          console.log('Transaction hash:', hash)
+          setError('Transaction submitted. View on Snowtrace: ' +
+            `https://snowtrace.io/tx/${hash}`)
+
+          await new Promise(resolve => setTimeout(resolve, 5000))
+          await refetchAccess()
+        } catch (txError) {
+          console.error('Transaction error:', txError)
+          if (txError.message.includes('insufficient funds')) {
+            throw new Error('Insufficient AVAX balance. Please make sure you have enough AVAX to cover the prediction cost and gas fees.')
+          } else if (txError.message.includes('rejected')) {
+            throw new Error('Transaction was rejected. Please try again.')
           }
-          console.log('Payment confirmed')
-        } catch (paymentError) {
-          console.error('Payment error:', paymentError)
-          setError('Payment cancelled or failed. Prediction not available.')
-          setLoadingPrediction(false)
-          return // Exit early if payment fails
+          throw txError
         }
-      } else {
-        console.log('Already paid for this prediction')
       }
 
-      // Only proceed if payment was successful or previously paid
-      const response = await fetch(`http://localhost:8000/predict/${selectedGame.id}`)
-      const data = await response.json()
+      // Use import.meta.env instead of process.env
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+      console.log('Fetching prediction for game:', selectedGame.id)
 
-      if (data.success && data.prediction) {
-        console.log('Setting prediction data:', data.prediction)
-        setPrediction(data.prediction)
-      } else {
-        throw new Error(data.error || 'Failed to get prediction')
+      try {
+        const response = await fetch(`${apiUrl}/predict/${selectedGame.id}`)
+        const data = await response.json()
+
+        console.log('Prediction response:', data)
+
+        if (!response.ok) {
+          throw new Error(data.error || `Server error: ${response.status}`)
+        }
+
+        if (data.success && data.prediction) {
+          setError(null)
+          setPrediction(data.prediction)
+        } else if (data.error) {
+          throw new Error(data.error)
+        } else {
+          throw new Error('No prediction data available for this game')
+        }
+      } catch (fetchError) {
+        console.error('Prediction fetch error:', fetchError)
+        if (fetchError.message.includes('Failed to fetch')) {
+          throw new Error('Unable to connect to prediction server. Please try again later.')
+        }
+        throw fetchError
       }
+
     } catch (err) {
-      console.error('Detailed error:', err)
+      console.error('Error details:', err)
       setError(err.message || 'Failed to get prediction')
+      setPrediction(null)
     } finally {
       setLoadingPrediction(false)
     }
