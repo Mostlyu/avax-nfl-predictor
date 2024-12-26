@@ -832,47 +832,38 @@ class NFLPredictor(NFLDataFetcher):
             favorite_confidence = team_scores[favorite_team]
             is_favorite_home = (favorite_team == home_team)
 
-            # Get team IDs and calculate adjustments
-            adjusted_confidence = favorite_confidence  # Start with base confidence
-
+            # Calculate adjusted confidence with SOS and rest impact
+            adjusted_confidence = favorite_confidence
             try:
                 favorite_id = self.get_team_info(favorite_team.lower())['id']
                 game_date = analysis.get('game_date', '')
 
                 if favorite_id and game_date:
-                    # Calculate adjustments
                     sos_impact = self.calculate_sos_impact(favorite_id, not is_favorite_home)
                     rest_impact = self.calculate_rest_impact(favorite_id, game_date)
-
-                    # Adjust confidence score
-                    adjusted_confidence = favorite_confidence + sos_impact + rest_impact
-
-                    # Cap total adjustment at ±5%
-                    if adjusted_confidence > favorite_confidence + 5:
-                        adjusted_confidence = favorite_confidence + 5
-                    if adjusted_confidence < favorite_confidence - 5:
-                        adjusted_confidence = favorite_confidence - 5
+                    adjusted_confidence = min(favorite_confidence + 5,
+                                        max(favorite_confidence - 5,
+                                            favorite_confidence + sos_impact + rest_impact))
             except Exception as e:
-                # If there's any error in adjustments, use original confidence
                 adjusted_confidence = favorite_confidence
 
-            # Always generate a spread recommendation
+            # Generate spread recommendation
             if odds and 'spread' in odds and odds['spread']:
-                # Compare team strengths based on confidence scores and advantages
+                # Compare team strengths
                 if favorite_team:
                     favorite_confidence = team_scores[favorite_team]
                     underdog_team = away_team if favorite_team == home_team else home_team
                     is_favorite_home = (favorite_team == home_team)
 
-                    # Logic for picking side based on team strength
-                    if favorite_confidence > 55:  # Strong favorite
+                    # Pick side based on team strength
+                    if favorite_confidence > 55:
                         look_for_side = 'Home' if is_favorite_home else 'Away'
                         team_name = favorite_team
-                    else:  # Take the points with underdog
+                    else:
                         look_for_side = 'Home' if not is_favorite_home else 'Away'
                         team_name = underdog_team
 
-                    # Find best line for our chosen side
+                    # Find best line
                     best_spread = None
                     best_odd = None
 
@@ -883,20 +874,11 @@ class NFLPredictor(NFLDataFetcher):
                                 best_odd = odd
 
                     if best_spread:
-                        # Get advantages for explanation
                         advantages = analysis['advantages'].get(team_name, [])
-                        if advantages:
-                            explanation = f"{team_name} show{'s' if not team_name.endswith('S') else ''} significant advantages in "
-                            explanation += ", ".join(adv.split(':')[0].lower() for adv in advantages[:2])
-                        else:
-                            explanation = f"Value found backing {team_name} at current line"
+                        explanation = (f"{team_name} show{'s' if not team_name.endswith('S') else ''} significant advantages in " +
+                                    ", ".join(adv.split(':')[0].lower() for adv in advantages[:2])) if advantages else f"Value found backing {team_name} at current line"
 
-                        # Calculate recommendation confidence
-                        if team_name == favorite_team:
-                            rec_confidence = min(75, favorite_confidence)  # Cap at 75%
-                        else:
-                            # For underdog plays, confidence should reflect upset potential
-                            rec_confidence = min(65, team_scores[team_name] + 5)  # Add slight boost for + points
+                        rec_confidence = min(75, favorite_confidence) if team_name == favorite_team else min(65, team_scores[team_name] + 5)
 
                         recommendations.append({
                             'type': 'Spread',
@@ -906,7 +888,7 @@ class NFLPredictor(NFLDataFetcher):
                             'explanation': explanation
                         })
 
-            # Calculate offensive and defensive efficiency
+            # Calculate totals (including half-time)
             if 'team_stats' in analysis:
                 offensive_metrics = {
                     'yards_per_play': lambda x: float(x) / 10,
@@ -921,104 +903,84 @@ class NFLPredictor(NFLDataFetcher):
                     'sacks': lambda x: float(x) / 5
                 }
 
-                total_rating = 0
-                metrics_count = 0
-                defense_rating = 0
-                defense_count = 0
+                # Calculate efficiency ratings
+                total_rating, metrics_count = 0, 0
+                defense_rating, defense_count = 0, 0
 
                 for team_stats in analysis['team_stats'].values():
-                    # Offensive efficiency
                     for metric, normalizer in offensive_metrics.items():
                         if metric in team_stats:
                             try:
-                                value = normalizer(team_stats[metric])
-                                total_rating += value
+                                total_rating += normalizer(team_stats[metric])
                                 metrics_count += 1
                             except (ValueError, TypeError, ZeroDivisionError):
                                 continue
 
-                    # Defensive considerations
                     for metric, normalizer in defensive_metrics.items():
                         if metric in team_stats:
                             try:
-                                value = normalizer(team_stats[metric])
-                                defense_rating += value
+                                defense_rating += normalizer(team_stats[metric])
                                 defense_count += 1
                             except (ValueError, TypeError, ZeroDivisionError):
                                 continue
 
-                # Calculate averages
-                if metrics_count > 0:
-                    avg_offensive_rating = total_rating / metrics_count
-                else:
-                    avg_offensive_rating = 0.5  # Neutral if no data
+                avg_offensive_rating = total_rating / metrics_count if metrics_count > 0 else 0.5
+                avg_defensive_rating = defense_rating / defense_count if defense_count > 0 else 0.5
 
-                if defense_count > 0:
-                    avg_defensive_rating = defense_rating / defense_count
-                else:
-                    avg_defensive_rating = 0.5  # Neutral if no data
+                # Find best total (full game, 1st half, or 2nd half)
+                best_total_play = None
+                best_confidence = 45  # Minimum confidence threshold
 
-                # Find best total based on combined ratings
-                best_total = None
-                best_odd = None
-                best_confidence = None
-                best_explanation = None
+                # Check all total markets
+                total_markets = [
+                    ('total', 35, 55),  # Full game
+                    ('first_half_total', 17, 28),  # First half
+                    ('second_half_total', 17, 28)  # Second half
+                ]
 
-                for total, odd in odds['total'].items():
-                    try:
-                        if 'Over' not in total and 'Under' not in total:
-                            continue
+                for market, min_points, max_points in total_markets:
+                    if market in odds:
+                        for total, odd in odds[market].items():
+                            try:
+                                if 'Over' not in total and 'Under' not in total:
+                                    continue
 
-                        points = float(total.split()[1])
-                        is_over = 'Over' in total
+                                points = float(total.split()[1])
+                                is_over = 'Over' in total
 
-                        # Filter unreasonable totals
-                        if points < 35 or points > 55:
-                            continue
+                                if points < min_points or points > max_points:
+                                    continue
 
-                        # Calculate confidence based on ratings
-                        if is_over and avg_offensive_rating > avg_defensive_rating:
-                            confidence = int((avg_offensive_rating * 70) + (avg_defensive_rating * 30))
-                            explanation = (
-                                "Strong offensive efficiency metrics suggest high-scoring game"
-                                if confidence > 60 else
-                                "Teams showing enough offensive efficiency to justify the over"
-                            )
-                        elif not is_over and avg_defensive_rating > avg_offensive_rating:
-                            confidence = int((avg_defensive_rating * 70) + ((1 - avg_offensive_rating) * 30))
-                            explanation = (
-                                "Strong defensive metrics suggest low-scoring game"
-                                if confidence > 60 else
-                                "Teams showing defensive strength, suggesting the under"
-                            )
-                        else:
-                            continue
+                                # Calculate confidence
+                                if is_over and avg_offensive_rating > avg_defensive_rating:
+                                    confidence = int((avg_offensive_rating * 70) + (avg_defensive_rating * 30))
+                                    period = "first half" if market == "first_half_total" else "second half" if market == "second_half_total" else "full game"
+                                    explanation = f"Strong offensive efficiency metrics suggest high-scoring {period}" if confidence > 60 else f"Teams showing enough offensive efficiency to justify the {period} over"
+                                elif not is_over and avg_defensive_rating > avg_offensive_rating:
+                                    confidence = int((avg_defensive_rating * 70) + ((1 - avg_offensive_rating) * 30))
+                                    period = "first half" if market == "first_half_total" else "second half" if market == "second_half_total" else "full game"
+                                    explanation = f"Strong defensive metrics suggest low-scoring {period}" if confidence > 60 else f"Teams showing defensive strength, suggesting the {period} under"
+                                else:
+                                    continue
 
-                        # Cap confidence at reasonable levels
-                        confidence = min(75, max(45, confidence))
+                                confidence = min(75, max(45, confidence))
 
-                        # Update best total if this is the first valid one or better than previous
-                        if best_total is None or (
-                            (is_over and avg_offensive_rating > 0.55) or
-                            (not is_over and avg_defensive_rating > 0.55)
-                        ):
-                            best_total = total
-                            best_odd = odd
-                            best_confidence = confidence
-                            best_explanation = explanation
+                                if confidence > best_confidence:
+                                    best_total_play = {
+                                        'type': f'Total ({market.replace("_", " ").title()})',
+                                        'bet': total,
+                                        'odds': odd,
+                                        'confidence': confidence,
+                                        'explanation': explanation
+                                    }
+                                    best_confidence = confidence
 
-                    except Exception as e:
-                        logger.error(f"Error processing total {total}: {e}")
-                        continue
+                            except Exception as e:
+                                logger.error(f"Error processing total {total}: {e}")
+                                continue
 
-                if best_total:
-                    recommendations.append({
-                        'type': 'Total',
-                        'bet': best_total,
-                        'odds': best_odd,
-                        'confidence': best_confidence,
-                        'explanation': best_explanation
-                    })
+                if best_total_play:
+                    recommendations.append(best_total_play)
 
         except Exception as e:
             print(f"Error generating recommendations: {e}")
