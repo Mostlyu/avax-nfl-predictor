@@ -9,7 +9,7 @@ const HowTo = () => {
 
           <div className="prose prose-blue max-w-none">
             <section className="mb-8">
-              <h2 className="text-2xl font-semibold mb-4">Getting Started</h2>
+              <h2 className="text-2xl font-semibold mb-4 text-blue-800">Getting Started</h2>
               <ol className="list-decimal pl-6 text-gray-600 space-y-4">
                 <li>
                   <strong>Connect Your Wallet</strong>
@@ -37,7 +37,7 @@ const HowTo = () => {
             </section>
 
             <section className="mb-8">
-              <h2 className="text-2xl font-semibold mb-4">Understanding Your Prediction</h2>
+              <h2 className="text-2xl font-semibold mb-4 text-blue-800">Understanding Your Prediction</h2>
               <div className="space-y-4 text-gray-600">
                 <p>Each prediction includes comprehensive analysis:</p>
                 <ul className="list-disc pl-6">
@@ -50,7 +50,7 @@ const HowTo = () => {
             </section>
 
             <section className="mb-8">
-              <h2 className="text-2xl font-semibold mb-4">Best Practices</h2>
+              <h2 className="text-2xl font-semibold mb-4 text-blue-800">Best Practices</h2>
               <ul className="list-disc pl-6 text-gray-600 space-y-3">
                 <li>Ensure sufficient AVAX balance (0.07 AVAX plus gas fees) before requesting predictions</li>
                 <li>For optimal accuracy, check predictions within 24 hours of game time</li>
@@ -60,7 +60,7 @@ const HowTo = () => {
             </section>
 
             <section className="bg-gray-50 rounded-lg p-6 mt-8">
-              <h2 className="text-xl font-semibold mb-4 text-gray-800">Troubleshooting Tips</h2>
+              <h2 className="text-2xl font-semibold mb-4 text-blue-800">Troubleshooting Tips</h2>
               <ul className="space-y-3 text-gray-600">
                 <li className="flex items-start">
                   <svg className="h-6 w-6 text-blue-500 mr-2 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">

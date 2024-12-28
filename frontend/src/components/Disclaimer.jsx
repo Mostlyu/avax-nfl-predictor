@@ -10,7 +10,7 @@ const Disclaimer = () => {
 
           <div className="prose prose-blue max-w-none">
             <section className="mb-8">
-              <h2 className="text-2xl font-semibold mb-4">Important Notice</h2>
+              <h2 className="text-2xl font-semibold mb-4 text-blue-800">Important Notice</h2>
               <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-6">
                 <p className="text-yellow-700">
                   All predictions provided by PickWizard.io are for entertainment and informational
@@ -20,7 +20,7 @@ const Disclaimer = () => {
             </section>
 
             <section className="mb-8">
-              <h2 className="text-2xl font-semibold mb-4">Understanding Our Predictions</h2>
+              <h2 className="text-2xl font-semibold mb-4 text-blue-800">Understanding Our Predictions</h2>
               <ul className="list-disc pl-6 text-gray-600 mb-4">
                 <li className="mb-2">Predictions are based on historical data and statistical analysis</li>
                 <li className="mb-2">Past performance does not guarantee future results</li>
@@ -30,7 +30,7 @@ const Disclaimer = () => {
             </section>
 
             <section className="mb-8">
-              <h2 className="text-2xl font-semibold mb-4">Risk Acknowledgment</h2>
+              <h2 className="text-2xl font-semibold mb-4 text-blue-800">Risk Acknowledgment</h2>
               <p className="text-gray-600 mb-4">
                 By using our service, you acknowledge and accept that:
               </p>

@@ -10,7 +10,7 @@ const Terms = () => {
 
           <div className="prose prose-blue max-w-none">
             <section className="mb-8">
-              <h2 className="text-2xl font-semibold mb-4">1. Agreement to Terms</h2>
+              <h2 className="text-2xl font-semibold mb-4 text-blue-800">1. Agreement to Terms</h2>
               <p className="text-gray-600 mb-4">
                 By accessing and using PickWizard.io, you agree to be bound by these Terms of Service.
                 If you do not agree to these terms, please do not use our service.
@@ -18,7 +18,7 @@ const Terms = () => {
             </section>
 
             <section className="mb-8">
-              <h2 className="text-2xl font-semibold mb-4">2. Service Description</h2>
+              <h2 className="text-2xl font-semibold mb-4 text-blue-800">2. Service Description</h2>
               <p className="text-gray-600 mb-4">
                 PickWizard.io provides NFL game predictions based on statistical analysis.
                 Our predictions are for entertainment and informational purposes only.
@@ -26,7 +26,7 @@ const Terms = () => {
             </section>
 
             <section className="mb-8">
-              <h2 className="text-2xl font-semibold mb-4">3. User Responsibilities</h2>
+              <h2 className="text-2xl font-semibold mb-4 text-blue-800">3. User Responsibilities</h2>
               <ul className="list-disc pl-6 text-gray-600 mb-4">
                 <li className="mb-2">You must be at least 18 years old to use this service</li>
                 <li className="mb-2">You are responsible for maintaining the security of your wallet</li>
@@ -35,7 +35,7 @@ const Terms = () => {
             </section>
 
             <section className="mb-8">
-              <h2 className="text-2xl font-semibold mb-4">4. Payments and Refunds</h2>
+              <h2 className="text-2xl font-semibold mb-4 text-blue-800">4. Payments and Refunds</h2>
               <p className="text-gray-600 mb-4">
                 All payments are processed through smart contracts on the Avalanche network.
                 Due to the nature of blockchain transactions, all purchases are final and non-refundable.
@@ -43,7 +43,7 @@ const Terms = () => {
             </section>
 
             <section className="mb-8">
-              <h2 className="text-2xl font-semibold mb-4">5. Limitation of Liability</h2>
+              <h2 className="text-2xl font-semibold mb-4 text-blue-800">5. Limitation of Liability</h2>
               <p className="text-gray-600 mb-4">
                 PickWizard.io provides predictions based on available data, but we cannot guarantee
                 their accuracy. We are not responsible for any losses incurred based on our predictions.
