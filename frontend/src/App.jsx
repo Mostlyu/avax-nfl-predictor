@@ -1,9 +1,13 @@
 // frontend/src/App.jsx
 import { useState, useEffect } from 'react'
+import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
 import { useAccount, useConnect, useReadContract, useWriteContract } from 'wagmi'
 import { injected } from 'wagmi/connectors'
 import { parseEther } from 'viem'
 import { API_URL } from './config';
+import Terms from './components/Terms';
+import Disclaimer from './components/Disclaimer';
+import HowTo from './components/HowTo';
 
 // Contract details
 const CONTRACT_ADDRESS = '0xde5c1e5DdE61FF85288320434a85d73e1f0CafED'
@@ -346,176 +350,193 @@ function App() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-blue-900 via-blue-800 to-blue-900">
-      <div className="container mx-auto px-4 py-8">
-        {/* Header */}
-        <div className="flex justify-between items-center mb-12">
-          <div>
-            <h1 className="text-5xl font-bold text-white">NFL Game Predictor</h1>
-            {networkInfo && (
-              <p className={`mt-2 ${networkInfo === 'Avalanche Fuji' ? 'text-green-400' : 'text-yellow-400'}`}>
-                Network: {networkInfo}
-              </p>
-            )}
-          </div>
+    <Router>
+      <div className="min-h-screen bg-gradient-to-b from-blue-900 via-blue-800 to-blue-900">
+        <div className="container mx-auto px-4 py-8">
+          {/* Header with Navigation */}
+          <div className="flex flex-col md:flex-row justify-between items-center mb-12">
+            <div>
+              <h1 className="text-5xl font-bold text-white">NFL Game Predictor</h1>
+              {networkInfo && (
+                <p className={`mt-2 ${networkInfo === 'Avalanche Network' ? 'text-green-400' : 'text-yellow-400'}`}>
+                  Network: {networkInfo}
+                </p>
+              )}
+            </div>
 
-          {/* Connect Wallet */}
-          <div>
-            {!isConnected ? (
-              <button
-                onClick={handleConnect}
-                className="bg-blue-600 text-white px-6 py-2 rounded-lg font-bold hover:bg-blue-700 transition"
-              >
-                Connect Wallet
-              </button>
-            ) : (
-              <div className="text-green-400">
-                Connected: {address?.slice(0, 6)}...{address?.slice(-4)}
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Network Error Display */}
-        {networkError && (
-          <div className="mb-4 p-3 bg-yellow-100 text-yellow-700 rounded-lg">
-            {networkError}
-          </div>
-        )}
-
-        {/* Error display */}
-        {error && (
-          <div className="mb-4 p-3 bg-red-100 text-red-700 rounded-lg">
-            {error}
-          </div>
-        )}
-        {/* Add Games List */}
-        <div className="bg-white bg-opacity-95 rounded-xl shadow-2xl p-8 max-w-4xl mx-auto">
-          <h2 className="text-2xl font-bold mb-6 text-gray-800">Upcoming Games</h2>
-
-          {loading ? (
-            <div className="text-center text-gray-600">Loading games...</div>
-          ) : (
-            <div className="grid grid-cols-1 gap-4">
-              {games.map((game) => (
-                <div
-                  key={game.id}
-                  className={`p-6 border-2 rounded-lg cursor-pointer transition-all ${
-                    selectedGame?.id === game.id
-                      ? 'border-blue-500 bg-blue-50'
-                      : 'border-gray-200 hover:border-blue-300 hover:shadow-md'
-                  }`}
-                  onClick={() => handleGameSelect(game)}
+            {/* Navigation Links */}
+            <nav className="mt-4 md:mt-0 space-x-6 flex items-center">
+              <Link to="/" className="text-white hover:text-blue-300">Home</Link>
+              <Link to="/how-to" className="text-white hover:text-blue-300">How To</Link>
+              <Link to="/disclaimer" className="text-white hover:text-blue-300">Disclaimer</Link>
+              <Link to="/terms" className="text-white hover:text-blue-300">Terms</Link>
+              {!isConnected ? (
+                <button
+                  onClick={handleConnect}
+                  className="bg-blue-600 text-white px-6 py-2 rounded-lg font-bold hover:bg-blue-700 transition ml-4"
                 >
-                  <div className="flex flex-col md:flex-row justify-between items-start md:items-center">
-                    <div className="flex-1 mb-2 md:mb-0">
-                      <div className="text-lg font-semibold text-gray-800">
-                        <span className="text-blue-600">{game.home_team}</span>
-                        <span className="mx-3 text-gray-400">vs</span>
-                        <span className="text-red-600">{game.away_team}</span>
-                      </div>
-                      <div className="text-sm text-gray-500 mt-1">
-                        {game.stadium}, {game.city}
-                      </div>
-                    </div>
-                    <div className="flex flex-col items-start md:items-end">
-                      <div className="font-medium text-gray-700">
-                        {game.date}
-                      </div>
-                    </div>
-                  </div>
+                  Connect Wallet
+                </button>
+              ) : (
+                <div className="text-green-400 ml-4">
+                  Connected: {address?.slice(0, 6)}...{address?.slice(-4)}
                 </div>
-              ))}
+              )}
+            </nav>
+          </div>
+
+          {/* Network Error Display */}
+          {networkError && (
+            <div className="mb-4 p-3 bg-yellow-100 text-yellow-700 rounded-lg">
+              {networkError}
             </div>
           )}
 
-          {/* Get Prediction Button */}
-          {selectedGame && isConnected && (
-            <div className="text-center mt-6">
-              <button
-                className="bg-blue-600 text-white px-8 py-3 rounded-lg font-bold hover:bg-blue-700 transition"
-                onClick={handleGetPrediction}
-                disabled={loadingPrediction}
-              >
-                {loadingPrediction ? 'Loading...' : 'Get Prediction'}
-              </button>
+          {/* Error display */}
+          {error && (
+            <div className="mb-4 p-3 bg-red-100 text-red-700 rounded-lg">
+              {error}
             </div>
           )}
 
-          {/* Prediction Display */}
-          {prediction && (
-            <div className="mt-8 pt-8 border-t border-gray-200">
-              <h3 className="text-2xl font-bold mb-6 text-gray-800">
-                Game Analysis: {prediction.matchup}
-              </h3>
+          {/* Routes */}
+          <Routes>
+            <Route path="/" element={
+              <div className="bg-white bg-opacity-95 rounded-xl shadow-2xl p-8 max-w-4xl mx-auto">
+                <h2 className="text-2xl font-bold mb-6 text-gray-800">Upcoming Games</h2>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {Object.entries(prediction.statistical_analysis.advantages).map(([team, advantages]) => (
-                  <div key={team} className="bg-white rounded-lg border-2 border-gray-200 p-6 shadow-sm">
-                    <h4 className="font-bold text-xl text-blue-600 mb-4">{team}</h4>
-                    <ul className="space-y-3">
-                      {advantages.map((advantage, index) => (
-                        <li key={index} className="flex items-start">
-                          <span className="text-blue-500 mr-2">•</span>
-                          <span className="text-gray-700">{advantage}</span>
-                        </li>
+                {loading ? (
+                  <div className="text-center text-gray-600">Loading games...</div>
+                ) : (
+                  <div className="grid grid-cols-1 gap-4">
+                    {games.map((game) => (
+                      <div
+                        key={game.id}
+                        className={`p-6 border-2 rounded-lg cursor-pointer transition-all ${
+                          selectedGame?.id === game.id
+                            ? 'border-blue-500 bg-blue-50'
+                            : 'border-gray-200 hover:border-blue-300 hover:shadow-md'
+                        }`}
+                        onClick={() => handleGameSelect(game)}
+                      >
+                        {/* Game content */}
+                        <div className="flex flex-col md:flex-row justify-between items-start md:items-center">
+                          <div className="flex-1 mb-2 md:mb-0">
+                            <div className="text-lg font-semibold text-gray-800">
+                              <span className="text-blue-600">{game.home_team}</span>
+                              <span className="mx-3 text-gray-400">vs</span>
+                              <span className="text-red-600">{game.away_team}</span>
+                            </div>
+                            <div className="text-sm text-gray-500 mt-1">
+                              {game.stadium}, {game.city}
+                            </div>
+                          </div>
+                          <div className="flex flex-col items-start md:items-end">
+                            <div className="font-medium text-gray-700">
+                              {game.date}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Get Prediction Button */}
+                {selectedGame && isConnected && (
+                  <div className="text-center mt-6">
+                    <button
+                      className="bg-blue-600 text-white px-8 py-3 rounded-lg font-bold hover:bg-blue-700 transition"
+                      onClick={handleGetPrediction}
+                      disabled={loadingPrediction}
+                    >
+                      {loadingPrediction ? 'Loading...' : 'Get Prediction'}
+                    </button>
+                  </div>
+                )}
+
+                {/* Prediction Display */}
+                {prediction && (
+                  <div className="mt-8 pt-8 border-t border-gray-200">
+                    {/* Your existing prediction display code */}
+                    <h3 className="text-2xl font-bold mb-6 text-gray-800">
+                      Game Analysis: {prediction.matchup}
+                    </h3>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      {Object.entries(prediction.statistical_analysis.advantages).map(([team, advantages]) => (
+                        <div key={team} className="bg-white rounded-lg border-2 border-gray-200 p-6 shadow-sm">
+                          <h4 className="font-bold text-xl text-blue-600 mb-4">{team}</h4>
+                          <ul className="space-y-3">
+                            {advantages.map((advantage, index) => (
+                              <li key={index} className="flex items-start">
+                                <span className="text-blue-500 mr-2">•</span>
+                                <span className="text-gray-700">{advantage}</span>
+                              </li>
+                            ))}
+                          </ul>
+                          {prediction.confidence_scores && (
+                            <div className="mt-6 pt-4 border-t border-gray-100">
+                              <div className="text-lg">
+                                <span className="font-semibold text-gray-700">Confidence Score: </span>
+                                <span className="text-blue-600 font-bold">
+                                  {prediction.confidence_scores[team]}%
+                                </span>
+                              </div>
+                            </div>
+                          )}
+                        </div>
                       ))}
-                    </ul>
-                    {prediction.confidence_scores && (
-                      <div className="mt-6 pt-4 border-t border-gray-100">
-                        <div className="text-lg">
-                          <span className="font-semibold text-gray-700">Confidence Score: </span>
-                          <span className="text-blue-600 font-bold">
-                            {prediction.confidence_scores[team]}%
-                          </span>
+                    </div>
+
+                    {prediction.betting_recommendations && prediction.betting_recommendations.length > 0 && (
+                      <div className="mt-8 pt-6 border-t border-gray-200">
+                        <h4 className="text-xl font-bold mb-4 text-gray-800">Betting Recommendations</h4>
+                        <div className="space-y-4">
+                          {prediction.betting_recommendations.map((rec, index) => (
+                            <div key={index} className="bg-white rounded-lg border border-gray-200 p-4">
+                              <div className="font-semibold text-gray-800 mb-2">{rec.type}</div>
+                              <div className="text-gray-600">Selection: {rec.bet}</div>
+                              <div className="text-gray-600">Odds: {rec.odds}</div>
+                              <div className="text-gray-600">Confidence: {rec.confidence}%</div>
+                              <div className="text-gray-600 mt-2">Analysis: {rec.explanation}</div>
+                            </div>
+                          ))}
                         </div>
                       </div>
                     )}
                   </div>
-                ))}
-              </div>
+                )}
 
-              {prediction.betting_recommendations && prediction.betting_recommendations.length > 0 && (
-                <div className="mt-8 pt-6 border-t border-gray-200">
-                  <h4 className="text-xl font-bold mb-4 text-gray-800">Betting Recommendations</h4>
-                  <div className="space-y-4">
-                    {prediction.betting_recommendations.map((rec, index) => (
-                      <div key={index} className="bg-white rounded-lg border border-gray-200 p-4">
-                        <div className="font-semibold text-gray-800 mb-2">{rec.type}</div>
-                        <div className="text-gray-600">Selection: {rec.bet}</div>
-                        <div className="text-gray-600">Odds: {rec.odds}</div>
-                        <div className="text-gray-600">Confidence: {rec.confidence}%</div>
-                        <div className="text-gray-600 mt-2">Analysis: {rec.explanation}</div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-          {/* Admin Section - Only visible to contract owner */}
-          {isConnected && address?.toLowerCase() === '0x781C8EE25E31B307510F88378972040d97eEe870'.toLowerCase() && (
-            <div className="mt-8 p-6 bg-gray-100 rounded-lg">
-              <h2 className="text-2xl font-bold mb-4">Admin Controls</h2>
-              <div className="space-y-4">
-                <button
-                  onClick={handleWithdraw}
-                  className="bg-purple-600 text-white px-6 py-2 rounded-lg font-bold hover:bg-purple-700 transition"
-                >
-                  Withdraw Funds
-                </button>
-                {withdrawalStatus && (
-                  <div className="mt-2 text-sm font-medium text-gray-700">
-                    {withdrawalStatus}
+                {/* Admin Section */}
+                {isConnected && address?.toLowerCase() === '0x781C8EE25E31B307510F88378972040d97eEe870'.toLowerCase() && (
+                  <div className="mt-8 p-6 bg-gray-100 rounded-lg">
+                    <h2 className="text-2xl font-bold mb-4">Admin Controls</h2>
+                    <div className="space-y-4">
+                      <button
+                        onClick={handleWithdraw}
+                        className="bg-purple-600 text-white px-6 py-2 rounded-lg font-bold hover:bg-purple-700 transition"
+                      >
+                        Withdraw Funds
+                      </button>
+                      {withdrawalStatus && (
+                        <div className="mt-2 text-sm font-medium text-gray-700">
+                          {withdrawalStatus}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 )}
               </div>
-            </div>
-          )}
+            } />
+            <Route path="/how-to" element={<HowTo />} />
+            <Route path="/disclaimer" element={<Disclaimer />} />
+            <Route path="/terms" element={<Terms />} />
+          </Routes>
         </div>
       </div>
-    </div>
-  )
+    </Router>
+  );
 }
 
 export default App
