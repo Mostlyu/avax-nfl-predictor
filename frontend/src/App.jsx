@@ -241,7 +241,7 @@ function App() {
         setError('Please confirm the transaction in MetaMask...')
 
         try {
-          const txResponse = await writeContract({
+          const { hash } = await writeContract({
             address: CONTRACT_ADDRESS,
             abi: ABI,
             functionName: 'purchasePrediction',
@@ -249,14 +249,27 @@ function App() {
             value: parseEther('0.07')
           })
 
-          console.log('Transaction hash:', txResponse)
-          setError('Transaction submitted. View on Snowtrace: ' +
-            `https://snowtrace.io/tx/${txResponse}`)
+          console.log('Transaction hash:', hash)
+          setError('Transaction submitted. Waiting for confirmation...')
 
-          // Wait for transaction confirmation
-          await new Promise(resolve => setTimeout(resolve, 5000))
+          // Wait for transaction to be mined
+          const provider = await window.ethereum
+          const receipt = await provider.request({
+            method: 'eth_getTransactionReceipt',
+            params: [hash],
+          })
 
-          // Check access again after payment
+          while (!receipt) {
+            await new Promise(resolve => setTimeout(resolve, 2000)) // Poll every 2 seconds
+            receipt = await provider.request({
+              method: 'eth_getTransactionReceipt',
+              params: [hash],
+            })
+          }
+
+          setError('Transaction confirmed. Fetching prediction...')
+
+          // Check access after confirmed transaction
           const newAccessResult = await refetchAccess()
           if (!newAccessResult.data) {
             throw new Error('Payment verification failed. Please try again.')
