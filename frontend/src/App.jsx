@@ -249,27 +249,13 @@ function App() {
             value: parseEther('0.07')
           })
 
-          console.log('Transaction response:', txResponse)
-          setError('Transaction submitted. Waiting for confirmation...')
+          console.log('Transaction hash:', txResponse)
+          setError('Transaction submitted. Waiting for confirmation on Avalanche network...')
 
-          // Wait for transaction to be mined
-          const provider = await window.ethereum
-          let receipt = await provider.request({
-            method: 'eth_getTransactionReceipt',
-            params: [txResponse],
-          })
+          // Wait for a reasonable amount of time (let's try 8 seconds)
+          await new Promise(resolve => setTimeout(resolve, 8000))
 
-          while (!receipt) {
-            await new Promise(resolve => setTimeout(resolve, 2000)) // Poll every 2 seconds
-            receipt = await provider.request({
-              method: 'eth_getTransactionReceipt',
-              params: [txResponse],
-            })
-          }
-
-          setError('Transaction confirmed. Fetching prediction...')
-
-          // Check access after confirmed transaction
+          // Check access after waiting
           const newAccessResult = await refetchAccess()
           if (!newAccessResult.data) {
             throw new Error('Payment verification failed. Please try again.')
