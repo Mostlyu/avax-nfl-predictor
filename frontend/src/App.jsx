@@ -241,7 +241,7 @@ function App() {
         setError('Please confirm the transaction in MetaMask...')
 
         try {
-          const { hash } = await writeContract({
+          const txResponse = await writeContract({
             address: CONTRACT_ADDRESS,
             abi: ABI,
             functionName: 'purchasePrediction',
@@ -249,21 +249,21 @@ function App() {
             value: parseEther('0.07')
           })
 
-          console.log('Transaction hash:', hash)
+          console.log('Transaction response:', txResponse)
           setError('Transaction submitted. Waiting for confirmation...')
 
           // Wait for transaction to be mined
           const provider = await window.ethereum
-          const receipt = await provider.request({
+          let receipt = await provider.request({
             method: 'eth_getTransactionReceipt',
-            params: [hash],
+            params: [txResponse],
           })
 
           while (!receipt) {
             await new Promise(resolve => setTimeout(resolve, 2000)) // Poll every 2 seconds
             receipt = await provider.request({
               method: 'eth_getTransactionReceipt',
-              params: [hash],
+              params: [txResponse],
             })
           }
 
