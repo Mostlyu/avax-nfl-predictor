@@ -173,50 +173,67 @@ function App() {
     fetchGames()
   }, [])
 
-  const fetchGames = async () => {
+  const fetchGames = async (retryCount = 0, maxRetries = 3) => {
     try {
       setLoading(true);
       setError(null);
 
       const apiUrl = import.meta.env.VITE_API_URL;
-      console.log('Fetching from:', apiUrl); // Debug log
+      console.log(`Fetching from: ${apiUrl} (Attempt ${retryCount + 1}/${maxRetries + 1})`);
 
-      const response = await fetch(`${apiUrl}/schedule`, {
-        headers: {
-          'Accept': 'application/json',
-          'Cache-Control': 'no-cache'
-        }
-      });
+      const response = await Promise.race([
+        fetch(`${apiUrl}/schedule`, {
+          headers: {
+            'Accept': 'application/json',
+            'Cache-Control': 'no-cache'
+          }
+        }),
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('Request timeout')), 10000)
+        )
+      ]);
 
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
 
       const data = await response.json();
-      console.log('Received data:', data); // Debug log
 
       if (data.success && Array.isArray(data.schedule)) {
         const sortedGames = data.schedule
-          .filter(game => game.home_team && game.away_team) // Filter out games with missing teams
+          .filter(game => game.home_team && game.away_team)
           .sort((a, b) => {
             const dateTimeA = new Date(`${a.date} ${a.time}`);
             const dateTimeB = new Date(`${b.date} ${b.time}`);
             return dateTimeA - dateTimeB;
           });
 
-        console.log('Sorted games:', sortedGames); // Debug log
+        console.log(`Successfully loaded ${sortedGames.length} games`);
         setGames(sortedGames);
+        setError(null);
       } else {
         throw new Error('Invalid schedule data format');
       }
     } catch (err) {
       console.error('Error fetching games:', err);
-      setError(`Failed to load games: ${err.message}`);
+
+      if (retryCount < maxRetries) {
+        const delay = Math.min(2000 * (retryCount + 1), 6000); // Exponential backoff, max 6 seconds
+        console.log(`Retrying in ${delay/1000} seconds... Attempt ${retryCount + 1} of ${maxRetries}`);
+        setError(`Loading games... Retry ${retryCount + 1} of ${maxRetries}`);
+
+        await new Promise(resolve => setTimeout(resolve, delay));
+        return fetchGames(retryCount + 1, maxRetries);
+      }
+
+      setError('Unable to load games. Please refresh the page.');
       setGames([]);
     } finally {
-      setLoading(false);
+      if (retryCount === maxRetries) {
+        setLoading(false);
+      }
     }
-  };
+  }
 
   // New handleGetPrediction function
   const handleGetPrediction = async () => {
