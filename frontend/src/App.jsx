@@ -8,6 +8,7 @@ import { API_URL } from './config';
 import Terms from './components/Terms';
 import Disclaimer from './components/Disclaimer';
 import HowTo from './components/HowTo';
+import LoadingSpinner from './components/LoadingSpinner';
 
 // Contract details
 const CONTRACT_ADDRESS = '0xde5c1e5DdE61FF85288320434a85d73e1f0CafED'
@@ -405,7 +406,7 @@ function App() {
                 <h2 className="text-2xl font-bold mb-6 text-gray-800">Upcoming Games</h2>
 
                 {loading ? (
-                  <div className="text-center text-gray-600">Loading games...</div>
+                  <LoadingSpinner />
                 ) : (
                   <div className="grid grid-cols-1 gap-4">
                     {games.map((game) => (
